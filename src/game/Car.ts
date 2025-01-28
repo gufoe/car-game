@@ -1,22 +1,26 @@
 import type { Position, Controls } from './types'
 
 export class Car {
-  private position: Position
-  private rotation = 0
-  private velocity = 0
+  private worldPosition: Position   // Position in world coordinates
   private readonly width = 50
   private readonly height = 90
+  private rotation = 0             // 0 means pointing up
+  private velocity = 0
   private readonly maxSpeed = 10
   private readonly acceleration = 0.2
   private readonly deceleration = 0.1
-  private readonly rotationSpeed = 0.1
+  private readonly rotationSpeed = 0.05  // Reduced for better control
 
-  constructor(position: Position) {
-    this.position = { ...position }
+  constructor(screenWidth: number, screenHeight: number) {
+    // Start at the bottom center of the screen in world coordinates
+    this.worldPosition = {
+      x: 0,
+      y: 0
+    }
   }
 
   public update(controls: Controls): void {
-    // Update rotation
+    // Update rotation (positive for right turn, negative for left)
     if (controls.left) this.rotation -= this.rotationSpeed
     if (controls.right) this.rotation += this.rotationSpeed
 
@@ -34,75 +38,80 @@ export class Car {
       }
     }
 
-    // Update position based on velocity and rotation
-    this.position.x += Math.sin(this.rotation) * this.velocity
-    this.position.y -= Math.cos(this.rotation) * this.velocity
+    // Update world position based on velocity and rotation
+    // When rotation is 0, car moves up (negative Y)
+    // When rotation is PI/2, car moves right (positive X)
+    this.worldPosition.x += Math.sin(this.rotation) * this.velocity
+    this.worldPosition.y -= Math.cos(this.rotation) * this.velocity  // Negative because Y increases downward
   }
 
   public draw(ctx: CanvasRenderingContext2D): void {
     ctx.save()
-    ctx.translate(this.position.x + this.width / 2, this.position.y + this.height / 2)
-    ctx.rotate(this.rotation)
 
-    // Create Ferrari red gradient for the body
+    // Position car at the bottom center of the screen
+    const screenX = ctx.canvas.width / 2 + this.worldPosition.x
+    const screenY = ctx.canvas.height * 0.8
+
+    // Draw at screen position
+    ctx.translate(screenX, screenY)
+    ctx.rotate(this.rotation)  // Positive rotation for clockwise turn
+
+    // Draw car body
+    this.drawCarBody(ctx)
+
+    ctx.restore()
+  }
+
+  private drawCarBody(ctx: CanvasRenderingContext2D): void {
+    // Draw main body (pointing up by default)
     const bodyGradient = ctx.createLinearGradient(-this.width/2, -this.height/2, this.width/2, this.height/2)
     bodyGradient.addColorStop(0, '#FF2800')
     bodyGradient.addColorStop(0.5, '#FF0000')
     bodyGradient.addColorStop(1, '#CC0000')
 
-    // Draw main body
     ctx.fillStyle = bodyGradient
     ctx.beginPath()
-    ctx.moveTo(-this.width/2, -this.height/2)
-    ctx.lineTo(this.width/2, -this.height/2)
-    ctx.lineTo(this.width/2, this.height/2)
-    ctx.lineTo(-this.width/2, this.height/2)
+    ctx.moveTo(0, -this.height/2)          // Top center (front of car)
+    ctx.lineTo(this.width/2, this.height/2) // Bottom right
+    ctx.lineTo(-this.width/2, this.height/2) // Bottom left
     ctx.closePath()
     ctx.fill()
 
     // Draw windshield
     const windshieldGradient = ctx.createLinearGradient(
-      -this.width/4, -this.height/4,
-      this.width/4, -this.height/6
+      -this.width/4, -this.height/3,
+      this.width/4, -this.height/4
     )
     windshieldGradient.addColorStop(0, '#1a1a1a')
     windshieldGradient.addColorStop(1, '#4a4a4a')
 
     ctx.fillStyle = windshieldGradient
     ctx.beginPath()
-    ctx.moveTo(-this.width/3, -this.height/4)
-    ctx.lineTo(this.width/3, -this.height/4)
-    ctx.lineTo(this.width/4, -this.height/6)
-    ctx.lineTo(-this.width/4, -this.height/6)
+    ctx.moveTo(0, -this.height/3)          // Top center
+    ctx.lineTo(this.width/3, -this.height/4) // Right
+    ctx.lineTo(-this.width/3, -this.height/4) // Left
     ctx.closePath()
     ctx.fill()
 
     // Draw headlights
     ctx.fillStyle = '#FFD700'
     ctx.beginPath()
-    ctx.arc(-this.width/4, -this.height/2 + 5, 5, 0, Math.PI * 2)
-    ctx.arc(this.width/4, -this.height/2 + 5, 5, 0, Math.PI * 2)
+    ctx.arc(-this.width/4, -this.height/3, 4, 0, Math.PI * 2)
+    ctx.arc(this.width/4, -this.height/3, 4, 0, Math.PI * 2)
     ctx.fill()
 
     // Draw rear wing
     ctx.fillStyle = '#000000'
-    ctx.fillRect(-this.width/2 - 5, this.height/2 - 10, this.width + 10, 5)
-
-    // Draw side mirrors
-    ctx.fillStyle = '#333333'
-    ctx.fillRect(-this.width/2 - 3, -this.height/4, 3, 10)
-    ctx.fillRect(this.width/2, -this.height/4, 3, 10)
+    ctx.fillRect(-this.width/2 - 5, this.height/3, this.width + 10, 5)
 
     // Draw racing stripes
     ctx.fillStyle = '#FFFFFF'
-    ctx.fillRect(-this.width/6, -this.height/2, 5, this.height)
-    ctx.fillRect(this.width/6, -this.height/2, 5, this.height)
-
-    ctx.restore()
+    ctx.fillRect(-this.width/8, -this.height/2, 4, this.height)
+    ctx.fillRect(this.width/8, -this.height/2, 4, this.height)
   }
 
-  public getPosition(): Position {
-    return { ...this.position }
+  public getWorldPosition(): Position {
+    return { ...this.worldPosition }
   }
 
   public getWidth(): number {
@@ -119,5 +128,9 @@ export class Car {
 
   public getRotation(): number {
     return this.rotation
+  }
+
+  public getVerticalVelocity(): number {
+    return -Math.cos(this.rotation) * this.velocity  // Negative because Y increases downward
   }
 }

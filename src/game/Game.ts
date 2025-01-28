@@ -20,6 +20,7 @@ export class Game {
   }
   private animationFrameId: number | null = null
   private lastTimestamp = 0
+  private cameraOffset = 0
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
@@ -30,7 +31,7 @@ export class Game {
     this.ctx = context
 
     // Initialize game objects
-    this.car = new Car({ x: canvas.width / 2, y: canvas.height * 0.8 })
+    this.car = new Car(canvas.width, canvas.height)
     this.road = new Road(canvas.width, canvas.height)
 
     // Set up event listeners
@@ -117,27 +118,27 @@ export class Game {
       // Update car
       this.car.update(this.controls)
 
-      // Update road and obstacles
-      const verticalVelocity = -Math.cos(this.car.getRotation()) * this.car.getVelocity()
-      this.road.update(verticalVelocity)
+      // Update road (just for obstacle generation)
+      this.road.update()
+
+      // Get car's world position for camera and scoring
+      const worldPos = this.car.getWorldPosition()
+
+      // Update score based on distance traveled
+      this.gameState.distance = Math.abs(worldPos.y)
+      this.gameState.score = Math.floor(this.gameState.distance / 100)
 
       // Check for collisions
       if (this.road.checkCollision(this.car)) {
         this.gameState.isGameOver = true
-      }
-
-      // Update score and distance
-      if (verticalVelocity > 0) {
-        this.gameState.distance += verticalVelocity
-        this.gameState.score = Math.floor(this.gameState.distance / 100)
       }
     }
 
     // Clear canvas
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height)
 
-    // Draw game objects
-    this.road.draw(this.ctx)
+    // Draw game objects (passing car's world position for camera)
+    this.road.draw(this.ctx, this.car.getWorldPosition())
     this.car.draw(this.ctx)
 
     // Draw HUD
