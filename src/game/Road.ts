@@ -6,13 +6,26 @@ export class Road {
   private height: number
   private roadWidth = 800
   private obstacles: Obstacle[] = []
-  private lastObstacleTime = 0
-  private readonly OBSTACLE_SPAWN_INTERVAL = 2000
   private readonly LINE_SPACING = 80
+  private lastCarY = 0
+  private readonly WALL_TRANSITION_SCORE = 5000
+  private readonly OBSTACLE_WIDTH = 80
+  private readonly OBSTACLE_HEIGHT = 40
+  private readonly OBSTACLE_SPACING = 300  // Consistent spacing between obstacles
+  private nextObstacleY = -1000  // Track where the next obstacle should be
 
   constructor(width: number, height: number) {
     this.width = width
     this.height = height
+    // Generate initial set of obstacles
+    this.generateInitialObstacles()
+  }
+
+  private generateInitialObstacles(): void {
+    // Generate 3 initial obstacles with fixed spacing
+    for (let i = 0; i < 3; i++) {
+      this.generateObstacle(-1000 - i * this.OBSTACLE_SPACING)
+    }
   }
 
   public resize(width: number, height: number): void {
@@ -21,87 +34,126 @@ export class Road {
   }
 
   public update(): void {
-    // Generate new obstacles
-    const currentTime = Date.now()
-    if (currentTime - this.lastObstacleTime > this.OBSTACLE_SPAWN_INTERVAL) {
-      this.generateObstacle()
-      this.lastObstacleTime = currentTime
+    // Generate new obstacles based on car position
+    const visibleTop = this.lastCarY - 2000  // Generate obstacles well ahead of the car
+
+    // Keep generating obstacles while there's space ahead
+    while (this.nextObstacleY > visibleTop) {
+      this.generateObstacle(this.nextObstacleY)
+      this.nextObstacleY -= this.OBSTACLE_SPACING
     }
-  }
-
-  private generateObstacle(): void {
-    const minGapWidth = 100
-    const maxGapWidth = 200
-    const gapWidth = minGapWidth + Math.random() * (maxGapWidth - minGapWidth)
-    const gapPosition = (this.width - this.roadWidth) / 2 + Math.random() * (this.roadWidth - gapWidth)
-
-    // Get the last obstacle's Y position or start from 0
-    const lastObstacleY = this.obstacles.length > 0
-      ? Math.min(...this.obstacles.map(o => o.position.y)) - 300 // Space between obstacles
-      : 0
-
-    const leftObstacle = {
-      position: { x: (this.width - this.roadWidth) / 2, y: lastObstacleY },
-      width: gapPosition - (this.width - this.roadWidth) / 2,
-      height: 40
-    }
-
-    const rightObstacle = {
-      position: { x: gapPosition + gapWidth, y: lastObstacleY },
-      width: this.roadWidth - (gapPosition + gapWidth - (this.width - this.roadWidth) / 2),
-      height: 40
-    }
-
-    this.obstacles.push(leftObstacle, rightObstacle)
 
     // Clean up obstacles that are too far behind
-    const carY = this.lastCarY
-    this.obstacles = this.obstacles.filter(
-      obstacle => obstacle.position.y > carY - 1000 && obstacle.position.y < carY + 1000
-    )
+    if (this.lastCarY !== 0) {
+      this.obstacles = this.obstacles.filter(
+        obstacle => obstacle.position.y > this.lastCarY - 2000 && obstacle.position.y < this.lastCarY + 1000
+      )
+    }
   }
 
-  private lastCarY = 0 // Keep track of car's Y position for cleanup
+  private generateObstacle(forcedY: number): void {
+    const progress = Math.abs(this.lastCarY)
+    const useWalls = progress > this.WALL_TRANSITION_SCORE
+
+    if (useWalls) {
+      // Generate wall with gap
+      const minGapWidth = 100
+      const maxGapWidth = 200
+      const gapWidth = minGapWidth + Math.random() * (maxGapWidth - minGapWidth)
+      const gapPosition = -this.roadWidth/2 + Math.random() * (this.roadWidth - gapWidth)
+
+      const leftObstacle = {
+        position: {
+          x: -this.roadWidth/2,
+          y: forcedY
+        },
+        width: gapPosition - (-this.roadWidth/2),
+        height: this.OBSTACLE_HEIGHT
+      }
+
+      const rightObstacle = {
+        position: {
+          x: gapPosition + gapWidth,
+          y: forcedY
+        },
+        width: this.roadWidth/2 - (gapPosition + gapWidth),
+        height: this.OBSTACLE_HEIGHT
+      }
+
+      this.obstacles.push(leftObstacle, rightObstacle)
+    } else {
+      // Generate single box obstacle
+      const minX = -this.roadWidth/2 + this.OBSTACLE_WIDTH
+      const maxX = this.roadWidth/2 - this.OBSTACLE_WIDTH
+      const obstacleX = minX + Math.random() * (maxX - minX)
+
+      const obstacle = {
+        position: {
+          x: obstacleX,
+          y: forcedY
+        },
+        width: this.OBSTACLE_WIDTH,
+        height: this.OBSTACLE_HEIGHT
+      }
+
+      this.obstacles.push(obstacle)
+    }
+  }
 
   public draw(ctx: CanvasRenderingContext2D, carWorldPos: Position): void {
-    this.lastCarY = carWorldPos.y // Update last known car position
+    this.lastCarY = carWorldPos.y
 
-    const roadX = (this.width - this.roadWidth) / 2
-    const cameraY = carWorldPos.y // Camera follows car's Y position
+    // Convert world coordinates to screen coordinates
+    const screenCenter = {
+      x: ctx.canvas.width / 2,
+      y: ctx.canvas.height * 0.8  // Match car's fixed screen position
+    }
 
     // Draw grass background
     ctx.fillStyle = '#27ae60'
     ctx.fillRect(0, 0, this.width, this.height)
 
-    // Draw road background
+    // Draw road background (convert from world to screen coordinates)
     ctx.fillStyle = '#34495e'
-    ctx.fillRect(roadX, 0, this.roadWidth, this.height)
+    const roadLeft = screenCenter.x - this.roadWidth/2
+    ctx.fillRect(roadLeft, 0, this.roadWidth, this.height)
 
     // Draw road lines
     ctx.strokeStyle = '#ffffff'
     ctx.setLineDash([40, 40])
     ctx.lineWidth = 5
 
+    // Calculate the visible range in world coordinates
+    // Extend the visible range much further above the car
+    const visibleTop = carWorldPos.y - (screenCenter.y / this.height) * 2000    // Doubled the view distance
+    const visibleBottom = carWorldPos.y + ((this.height - screenCenter.y) / this.height) * 1000
+
     // Calculate which lines should be visible in camera view
-    const firstLineY = Math.floor(cameraY / this.LINE_SPACING) * this.LINE_SPACING
-    const screenY = (worldY: number): number => this.height/2 - (cameraY - worldY) // Convert world Y to screen Y
+    const firstLineY = Math.floor(visibleTop / this.LINE_SPACING) * this.LINE_SPACING
+    const lastLineY = Math.ceil(visibleBottom / this.LINE_SPACING) * this.LINE_SPACING
+
+    // Convert world Y to screen Y
+    const screenY = (worldY: number): number => {
+      return screenCenter.y + (worldY - carWorldPos.y)
+    }
 
     // Draw visible lines
-    for (let worldY = firstLineY - this.LINE_SPACING * 2;
-         worldY <= firstLineY + this.height + this.LINE_SPACING;
-         worldY += this.LINE_SPACING) {
+    for (let worldY = firstLineY; worldY <= lastLineY; worldY += this.LINE_SPACING) {
       const y = screenY(worldY)
 
-      // Left line
-      this.drawLine(ctx, roadX, y, roadX, y + 40)
+      // Extend the drawing range slightly above viewport to ensure smooth transition
+      if (y >= -40 && y <= this.height) {
+        // Left line
+        this.drawLine(ctx, roadLeft, y, roadLeft, y + 40)
 
-      // Right line
-      this.drawLine(ctx, roadX + this.roadWidth, y, roadX + this.roadWidth, y + 40)
+        // Right line
+        this.drawLine(ctx, roadLeft + this.roadWidth, y, roadLeft + this.roadWidth, y + 40)
 
-      // Center line (yellow)
-      ctx.strokeStyle = '#f1c40f'
-      this.drawLine(ctx, roadX + this.roadWidth / 2, y, roadX + this.roadWidth / 2, y + 40)
-      ctx.strokeStyle = '#ffffff'
+        // Center line (yellow)
+        ctx.strokeStyle = '#f1c40f'
+        this.drawLine(ctx, roadLeft + this.roadWidth/2, y, roadLeft + this.roadWidth/2, y + 40)
+        ctx.strokeStyle = '#ffffff'
+      }
     }
 
     ctx.setLineDash([])
@@ -110,10 +162,12 @@ export class Road {
     ctx.fillStyle = '#2ecc71'
     this.obstacles.forEach(obstacle => {
       const obstacleScreenY = screenY(obstacle.position.y)
-      // Only draw if in view
-      if (obstacleScreenY > -100 && obstacleScreenY < this.height + 100) {
+      const obstacleScreenX = screenCenter.x + obstacle.position.x
+
+      // Extend the drawing range slightly above viewport to ensure smooth transition
+      if (obstacleScreenY >= -obstacle.height * 2 && obstacleScreenY <= this.height) {
         ctx.fillRect(
-          obstacle.position.x,
+          obstacleScreenX,
           obstacleScreenY,
           obstacle.width,
           obstacle.height
@@ -134,11 +188,20 @@ export class Road {
     const carWidth = car.getWidth()
     const carHeight = car.getHeight()
 
+    // Calculate car's bounding box in world coordinates
+    // Remember: negative Y is up, so we add height/2 for top and subtract for bottom
+    const carLeft = carWorldPos.x - carWidth/2
+    const carRight = carWorldPos.x + carWidth/2
+    const carTop = carWorldPos.y + carHeight/2    // Changed: add height/2 because negative Y is up
+    const carBottom = carWorldPos.y - carHeight/2  // Changed: subtract height/2 because negative Y is up
+
     for (const obstacle of this.obstacles) {
-      if (carWorldPos.x < obstacle.position.x + obstacle.width &&
-          carWorldPos.x + carWidth > obstacle.position.x &&
-          carWorldPos.y < obstacle.position.y + obstacle.height &&
-          carWorldPos.y + carHeight > obstacle.position.y) {
+      // Obstacles are already in world coordinates
+      // Remember: obstacle.position.y is in world coordinates where negative is up
+      if (carRight > obstacle.position.x &&
+          carLeft < obstacle.position.x + obstacle.width &&
+          carBottom < obstacle.position.y + obstacle.height && // Changed: car bottom should be less than obstacle top
+          carTop > obstacle.position.y) {                     // Changed: car top should be greater than obstacle bottom
         return true
       }
     }
