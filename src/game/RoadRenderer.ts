@@ -77,18 +77,83 @@ export class RoadRenderer {
     obstacles: Obstacle[],
     screenCenter: Position
   ): void {
-    ctx.fillStyle = '#2ecc71'
     obstacles.forEach(obstacle => {
       const obstacleScreenY = this.worldToScreenY(obstacle.position.y, carWorldPos.y, screenCenter.y)
       const obstacleScreenX = screenCenter.x + obstacle.position.x
 
       if (obstacleScreenY >= -obstacle.height * 2 && obstacleScreenY <= this.config.height) {
-        ctx.fillRect(
-          obstacleScreenX,
-          obstacleScreenY,
-          obstacle.width,
-          obstacle.height
-        )
+        const x = obstacleScreenX
+        const y = obstacleScreenY
+        const width = obstacle.width
+        const height = obstacle.height
+
+        // Add shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)'
+        ctx.fillRect(x + 4, y + height + 2, width, 4)
+
+        // Main box
+        ctx.fillStyle = '#4a4a4a'
+        ctx.fillRect(x, y, width, height)
+
+        // Warning stripes
+        const stripeWidth = height / 3.5
+        const stripeSpacing = stripeWidth * 2
+
+        ctx.save()
+        ctx.beginPath()
+        ctx.rect(x, y, width, height)
+        ctx.clip()
+
+        // Black stripes
+        ctx.fillStyle = '#000000'
+        for (let i = -width; i < width * 2; i += stripeSpacing) {
+          ctx.fillRect(x + i, y, stripeWidth, height)
+        }
+
+        // Yellow stripes
+        ctx.fillStyle = '#FFD700'
+        for (let i = -width + stripeWidth; i < width * 2; i += stripeSpacing) {
+          ctx.fillRect(x + i, y, stripeWidth, height)
+        }
+        ctx.restore()
+
+        // Edge highlights
+        const edgeWidth = 4
+
+        // Top highlight
+        ctx.fillStyle = '#6a6a6a'
+        ctx.fillRect(x, y, width, edgeWidth)
+
+        // Right highlight
+        ctx.fillStyle = '#5a5a5a'
+        ctx.fillRect(x + width - edgeWidth, y, edgeWidth, height)
+
+        // Bottom shadow
+        ctx.fillStyle = '#3a3a3a'
+        ctx.fillRect(x, y + height - edgeWidth, width, edgeWidth)
+
+        // Corner rivets
+        const rivetRadius = 3
+        const rivetInset = rivetRadius * 2
+        const drawRivet = (rx: number, ry: number) => {
+          // Main rivet
+          ctx.fillStyle = '#6a6a6a'
+          ctx.beginPath()
+          ctx.arc(rx, ry, rivetRadius, 0, Math.PI * 2)
+          ctx.fill()
+
+          // Highlight
+          ctx.fillStyle = '#8a8a8a'
+          ctx.beginPath()
+          ctx.arc(rx - 1, ry - 1, rivetRadius / 2, 0, Math.PI * 2)
+          ctx.fill()
+        }
+
+        // Draw rivets only at corners
+        drawRivet(x + rivetInset, y + rivetInset)
+        drawRivet(x + width - rivetInset, y + rivetInset)
+        drawRivet(x + rivetInset, y + height - rivetInset)
+        drawRivet(x + width - rivetInset, y + height - rivetInset)
       }
     })
   }

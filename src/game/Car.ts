@@ -16,6 +16,7 @@ export class Car {
 
   // Physics constants
   private readonly maxSpeed = 10
+  private readonly maxReverseSpeed = 5
   private readonly acceleration = 0.2
   private readonly deceleration = 0.1
   private readonly steeringSpeed = Math.PI / 32
@@ -24,6 +25,15 @@ export class Car {
   private readonly gripFactor = 0.95       // How much grip the car has (0-1)
   private readonly driftFactor = 0.7       // How much the car drifts (0-1)
   private readonly weightTransfer = 0.02   // Effect of weight transfer during turns
+  private readonly tireFriction = 0.9      // Increased base friction
+  private readonly corneringStiffness = 0.8  // Increased for better grip
+  private readonly reverseSteerFactor = 1.2
+  private readonly inertiaFactor = 0.95    // Slightly reduced for better control
+  private readonly lateralDampening = 0.92 // New: controls how quickly lateral forces diminish
+
+  // Dynamic state variables
+  private weightDistribution = 0.5
+  private slipAngle = 0
 
   private readonly drawer: CarDrawer
 
@@ -65,11 +75,13 @@ export class Car {
       const sin = Math.sin(this.steeringAngle)
 
       // Rotate front wheels
-      frontLeft.x = frontLeft.x * cos - frontLeft.y * sin
-      frontLeft.y = frontLeft.x * sin + frontLeft.y * cos
+      const frontLeftX = frontLeft.x
+      frontLeft.x = frontLeftX * cos - frontLeft.y * sin
+      frontLeft.y = frontLeftX * sin + frontLeft.y * cos
 
-      frontRight.x = frontRight.x * cos - frontRight.y * sin
-      frontRight.y = frontRight.x * sin + frontRight.y * cos
+      const frontRightX = frontRight.x
+      frontRight.x = frontRightX * cos - frontRight.y * sin
+      frontRight.y = frontRightX * sin + frontRight.y * cos
     }
 
     // Transform to world coordinates
@@ -153,6 +165,12 @@ export class Car {
   private updatePhysics(): void {
     if (Math.abs(this.velocity) < 0.1) return  // Skip physics at very low speeds
 
+    const isReversing = this.velocity < 0
+    const speedFactor = Math.min(Math.abs(this.velocity) / (isReversing ? this.maxReverseSpeed : this.maxSpeed), 1)
+
+    // Calculate effective steering angle
+    const effectiveSteeringAngle = this.steeringAngle * (isReversing ? -this.reverseSteerFactor : 1)
+
     // Calculate turn radius based on steering angle and wheelbase
     // Ackermann steering geometry (simplified)
     const turnRadius = this.wheelbase / Math.sin(Math.abs(this.steeringAngle) + 0.001)
@@ -161,7 +179,6 @@ export class Car {
     const idealTurnRate = (this.velocity / turnRadius) * Math.sign(this.steeringAngle)
 
     // Calculate actual turn rate with grip and drift factors
-    const speedFactor = Math.min(Math.abs(this.velocity) / this.maxSpeed, 1)
     const gripMultiplier = this.gripFactor * (1 - speedFactor * (1 - this.driftFactor))
 
     // Apply weight transfer effect
