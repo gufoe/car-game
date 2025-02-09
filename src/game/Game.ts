@@ -21,6 +21,7 @@ export class Game {
   private animationFrameId: number | null = null
   private lastTimestamp = 0
   private cameraOffset = 0
+  private isDebugMode = false
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
@@ -43,6 +44,15 @@ export class Game {
     window.addEventListener('keydown', this.handleKeyDown.bind(this))
     window.addEventListener('keyup', this.handleKeyUp.bind(this))
     window.addEventListener('resize', this.handleResize.bind(this))
+
+    // Add debug mode toggle listener
+    window.addEventListener('keydown', (e) => {
+      if (e.key === '`' || e.key === '~') {
+        this.isDebugMode = !this.isDebugMode
+        // Prevent the key from triggering browser's console
+        e.preventDefault()
+      }
+    })
 
     // Initial resize
     this.handleResize()
@@ -145,11 +155,24 @@ export class Game {
     // Clear canvas
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height)
 
-    // Draw game objects (passing car's world position for camera)
-    this.road.draw(this.ctx, this.car.getWorldPosition(), this.car.getVelocity())
-    this.car.draw(this.ctx)
+    // Set up camera transformation
+    this.ctx.save()
+    const screenX = this.canvas.width / 2
+    const screenY = this.canvas.height * 0.8
+    const carWorldPos = this.car.getWorldPosition()
+    // Translate to screen center and offset by car's Y position to create camera follow effect
+    this.ctx.translate(screenX, screenY - carWorldPos.y)
 
-    // Draw HUD
+    // Draw game objects (passing car's world position for camera)
+    this.road.draw(this.ctx, carWorldPos, this.car.getVelocity(), this.isDebugMode)
+    if (!this.isDebugMode) {
+      this.car.draw(this.ctx)
+    }
+    this.car.debugDraw(this.ctx, this.isDebugMode)
+
+    this.ctx.restore()
+
+    // Draw HUD (in screen space)
     this.drawHUD()
 
     // Continue animation

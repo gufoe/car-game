@@ -1,7 +1,7 @@
-import type { Position, RoadConfig } from '../types'
 import type { Car } from '../Car'
-import { MapEntity, type MapEntityEffect } from './MapEntity'
 import { CircleShape, RectShape } from '../shapes/Shape'
+import type { RoadConfig } from '../types'
+import { MapEntity, type MapEntityEffect } from './MapEntity'
 
 export class MapEntityManager {
   private entities: MapEntity[] = []
@@ -25,8 +25,11 @@ export class MapEntityManager {
   }
 
   public update(lastCarY: number, deltaTime: number): void {
+    // Generate entities 2000 units ahead of the car
     const visibleTop = lastCarY - 2000
+    const visibleBottom = lastCarY + 1000
 
+    // Keep generating entities ahead of the car
     while (this.nextEntityY > visibleTop) {
       this.generateRandomEntity(this.nextEntityY)
       this.nextEntityY -= this.config.obstacleSpacing
@@ -35,21 +38,19 @@ export class MapEntityManager {
     // Update each entity
     this.entities.forEach(entity => entity.update(deltaTime))
 
-    // Clean up inactive or out-of-view entities
-    if (lastCarY !== 0) {
-      this.entities = this.entities.filter(entity => {
-        if (!entity.isActiveEntity()) return false
-        const pos = entity.getShape().getPosition()
-        return pos.y > lastCarY - 2000 && pos.y < lastCarY + 1000
-      })
-    }
+    // Clean up entities that are too far behind the car
+    this.entities = this.entities.filter(entity => {
+      if (!entity.isActiveEntity()) return false
+      const pos = entity.getShape().getPosition()
+      return pos.y > visibleTop && pos.y < visibleBottom
+    })
   }
 
   private generateRandomEntity(y: number): void {
     const progress = Math.abs(y)
 
     // As the game progresses, increase the chance of power-ups
-    const powerUpChance = Math.min(0.3, progress / 20000) // Max 30% chance for power-ups
+    const powerUpChance = Math.max(0.1, Math.min(0.3, progress / 20000)) // Max 30% chance for power-ups
 
     if (Math.random() < powerUpChance) {
       this.generatePowerUp(y)
@@ -75,13 +76,14 @@ export class MapEntityManager {
       const speedBoost = new MapEntity({
         shape: new CircleShape(x, y, 20), // Use a circle shape for power-ups
         duration: 5000, // 5 seconds
+        deactivateOnHit: true, // Power-ups should disappear when collected
         draw: (ctx, x, y, width, height) => {
           // Draw speed boost power-up
           ctx.fillStyle = '#00ff00'
           ctx.beginPath()
-          ctx.moveTo(x + width/2, y)
-          ctx.lineTo(x + width, y + height)
-          ctx.lineTo(x, y + height)
+          ctx.moveTo(x, y - height/2)  // Top center
+          ctx.lineTo(x + width/2, y + height/2)  // Bottom right
+          ctx.lineTo(x - width/2, y + height/2)  // Bottom left
           ctx.closePath()
           ctx.fill()
 
@@ -116,7 +118,7 @@ export class MapEntityManager {
         draw: (ctx, x, y, width, height) => {
           // Draw wall section with the same style as before
           ctx.fillStyle = '#4a4a4a'
-          ctx.fillRect(x, y, width, height)
+          ctx.fillRect(x - width/2, y - height/2, width, height)
 
           // Add warning stripes
           const stripeWidth = height / 3.5
@@ -124,19 +126,19 @@ export class MapEntityManager {
 
           ctx.save()
           ctx.beginPath()
-          ctx.rect(x, y, width, height)
+          ctx.rect(x - width/2, y - height/2, width, height)
           ctx.clip()
 
           // Black stripes
           ctx.fillStyle = '#000000'
           for (let i = -width; i < width * 2; i += stripeSpacing) {
-            ctx.fillRect(x + i, y, stripeWidth, height)
+            ctx.fillRect(x - width/2 + i, y - height/2, stripeWidth, height)
           }
 
           // Yellow stripes
           ctx.fillStyle = '#FFD700'
           for (let i = -width + stripeWidth; i < width * 2; i += stripeSpacing) {
-            ctx.fillRect(x + i, y, stripeWidth, height)
+            ctx.fillRect(x - width/2 + i, y - height/2, stripeWidth, height)
           }
           ctx.restore()
         },
@@ -169,7 +171,7 @@ export class MapEntityManager {
       draw: (ctx, x, y, width, height) => {
         // Draw box obstacle with the same style as before
         ctx.fillStyle = '#4a4a4a'
-        ctx.fillRect(x, y, width, height)
+        ctx.fillRect(x - width/2, y - height/2, width, height)
 
         // Add warning stripes
         const stripeWidth = height / 3.5
@@ -177,19 +179,19 @@ export class MapEntityManager {
 
         ctx.save()
         ctx.beginPath()
-        ctx.rect(x, y, width, height)
+        ctx.rect(x - width/2, y - height/2, width, height)
         ctx.clip()
 
         // Black stripes
         ctx.fillStyle = '#000000'
         for (let i = -width; i < width * 2; i += stripeSpacing) {
-          ctx.fillRect(x + i, y, stripeWidth, height)
+          ctx.fillRect(x - width/2 + i, y - height/2, stripeWidth, height)
         }
 
         // Yellow stripes
         ctx.fillStyle = '#FFD700'
         for (let i = -width + stripeWidth; i < width * 2; i += stripeSpacing) {
-          ctx.fillRect(x + i, y, stripeWidth, height)
+          ctx.fillRect(x - width/2 + i, y - height/2, stripeWidth, height)
         }
         ctx.restore()
       },

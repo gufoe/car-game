@@ -230,37 +230,75 @@ export class Car {
   }
 
   private updatePosition(): void {
-    // Update position based on forward velocity and rotation
-    const forwardX = Math.sin(this.rotation) * this.velocity
-    const forwardY = -Math.cos(this.rotation) * this.velocity
+    // Update position based on velocity and rotation
+    this.worldPosition.x += Math.sin(this.rotation) * this.velocity + Math.cos(this.rotation) * this.lateralVelocity
+    this.worldPosition.y -= Math.cos(this.rotation) * this.velocity - Math.sin(this.rotation) * this.lateralVelocity
 
-    // Add lateral velocity contribution (drift)
-    const lateralX = Math.cos(this.rotation) * this.lateralVelocity
-    const lateralY = Math.sin(this.rotation) * this.lateralVelocity
+    // Calculate corners of the rotated rectangle
+    const halfWidth = this.width / 2
+    const halfHeight = this.height / 2
+    const cos = Math.cos(this.rotation)
+    const sin = Math.sin(this.rotation)
 
-    // Combine movements
-    this.worldPosition.x += forwardX + lateralX
-    this.worldPosition.y += forwardY + lateralY
+    const corners = [
+      { // Top left (front left since car points up)
+        x: this.worldPosition.x - halfWidth * cos + halfHeight * sin,
+        y: this.worldPosition.y - halfWidth * sin - halfHeight * cos
+      },
+      { // Top right (front right)
+        x: this.worldPosition.x + halfWidth * cos + halfHeight * sin,
+        y: this.worldPosition.y + halfWidth * sin - halfHeight * cos
+      },
+      { // Bottom right (rear right)
+        x: this.worldPosition.x + halfWidth * cos - halfHeight * sin,
+        y: this.worldPosition.y + halfWidth * sin + halfHeight * cos
+      },
+      { // Bottom left (rear left)
+        x: this.worldPosition.x - halfWidth * cos - halfHeight * sin,
+        y: this.worldPosition.y - halfWidth * sin + halfHeight * cos
+      }
+    ]
+
+    // Create a new shape with the actual rotated rectangle
+    this.shape = new RectShape(
+      this.worldPosition.x,
+      this.worldPosition.y,
+      this.width,
+      this.height,
+      this.rotation,
+      corners
+    )
   }
 
   public draw(ctx: CanvasRenderingContext2D): void {
-    const screenX = ctx.canvas.width / 2
-    const screenY = ctx.canvas.height * 0.8
-
     ctx.save()
 
     // Draw visual effects first (behind everything)
     this.effects.draw(ctx, this.worldPosition)
 
-    // Move to car's screen position (including world offset)
-    ctx.translate(screenX + this.worldPosition.x, screenY)
-
     // Draw traces relative to car's position
     this.traces.draw(ctx, this.worldPosition)
 
-    // Draw car (only need rotation since we're already at the right position)
+    // Move to car's position and rotate
+    ctx.translate(this.worldPosition.x, this.worldPosition.y)
     ctx.rotate(this.rotation)
     this.drawer.drawCar(ctx, this.width, this.height, this.steeringAngle)
+    ctx.restore()
+  }
+
+  public debugDraw(ctx: CanvasRenderingContext2D, isDebugMode: boolean): void {
+    if (!isDebugMode) return
+
+    ctx.save()
+    // Draw the collision shape (already in world coordinates)
+    this.shape.debugDraw(ctx)
+
+    // Draw the car's center point
+    ctx.fillStyle = '#00ff00'
+    ctx.beginPath()
+    ctx.arc(this.worldPosition.x, this.worldPosition.y, 3, 0, Math.PI * 2)
+    ctx.fill()
+
     ctx.restore()
   }
 

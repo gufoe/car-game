@@ -3,6 +3,7 @@ import { DEFAULT_ROAD_CONFIG } from './types'
 import { Car } from './Car'
 import { MapEntityManager } from './entities/MapEntityManager'
 import { RoadRenderer } from './RoadRenderer'
+import { CircleShape, RectShape } from './shapes/Shape'
 
 export class Road {
   private config: RoadConfig
@@ -34,9 +35,16 @@ export class Road {
     this.entityManager.update(this.lastCarY, deltaTime)
   }
 
-  public draw(ctx: CanvasRenderingContext2D, carWorldPos: Position, speed: number = 0): void {
+  public draw(ctx: CanvasRenderingContext2D, carWorldPos: Position, speed: number = 0, isDebugMode: boolean = false): void {
     this.lastCarY = carWorldPos.y
-    this.renderer.draw(ctx, carWorldPos, this.entityManager.getEntities(), speed)
+    if (!isDebugMode) {
+      this.renderer.draw(ctx, carWorldPos, this.entityManager.getEntities(), speed)
+    } else {
+      // In debug mode, only draw the collision shapes
+      this.entityManager.getEntities().forEach(entity => {
+        entity.getShape().debugDraw(ctx)
+      })
+    }
   }
 
   public checkCollision(car: Car): boolean {

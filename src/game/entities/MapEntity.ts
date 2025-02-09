@@ -1,8 +1,6 @@
 import type { Position } from '../types'
 import type { Car } from '../Car'
-import type { Shape } from '../shapes/Shape'
-import type { RectShape } from '../shapes/RectShape'
-import type { CircleShape } from '../shapes/CircleShape'
+import { CircleShape, RectShape, type Shape } from '../shapes/Shape'
 
 export interface MapEntityConfig {
   shape: Shape
@@ -10,6 +8,7 @@ export interface MapEntityConfig {
   onHit?: (car: Car) => void
   onUpdate?: (deltaTime: number) => void
   duration?: number // Duration of effect in milliseconds, if applicable
+  deactivateOnHit?: boolean // Whether the entity should be deactivated when hit
 }
 
 export interface MapEntityEffect {
@@ -25,6 +24,7 @@ export class MapEntity {
   private onHit?: (car: Car) => void
   private onUpdate?: (deltaTime: number) => void
   private duration?: number
+  private deactivateOnHit: boolean
   private isActive: boolean = true
   private effect?: MapEntityEffect
 
@@ -34,13 +34,14 @@ export class MapEntity {
     this.onHit = config.onHit
     this.onUpdate = config.onUpdate
     this.duration = config.duration
+    this.deactivateOnHit = config.deactivateOnHit ?? false
   }
 
   public handleCollision(car: Car): void {
     if (this.isActive && this.onHit) {
       this.onHit(car)
-      // If this is a one-time effect entity, deactivate it
-      if (!this.duration) {
+      // Only deactivate if explicitly set to do so
+      if (this.deactivateOnHit) {
         this.isActive = false
       }
     }
@@ -52,7 +53,7 @@ export class MapEntity {
     }
   }
 
-  public render(ctx: CanvasRenderingContext2D, screenX: number, screenY: number): void {
+  public render(ctx: CanvasRenderingContext2D, x: number, y: number): void {
     if (this.isActive && this.draw) {
       // Calculate dimensions based on shape type
       let width: number, height: number
@@ -67,7 +68,8 @@ export class MapEntity {
         width = circleShape.radius * 2
         height = circleShape.radius * 2
       }
-      this.draw(ctx, screenX, screenY, width, height)
+      // Use world coordinates directly
+      this.draw(ctx, x, y, width, height)
     }
   }
 
