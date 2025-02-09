@@ -1,5 +1,6 @@
 import type { Position, RoadConfig } from './types'
 import type { MapEntity } from './entities/MapEntity'
+import { RectShape, CircleShape } from './shapes/Shape'
 
 export class RoadRenderer {
   private config: RoadConfig
@@ -97,10 +98,26 @@ export class RoadRenderer {
     screenCenter: Position
   ): void {
     entities.forEach(entity => {
-      const entityScreenY = this.worldToScreenY(entity.position.y, carWorldPos.y, screenCenter.y)
-      const entityScreenX = screenCenter.x + entity.position.x
+      const shape = entity.getShape()
+      const pos = shape.getPosition()
+      const entityScreenY = this.worldToScreenY(pos.y, carWorldPos.y, screenCenter.y)
+      const entityScreenX = screenCenter.x + pos.x
 
-      if (entityScreenY >= -entity.height * 2 && entityScreenY <= this.config.height) {
+      // Get dimensions from shape
+      let width: number, height: number
+      if ('width' in shape && 'height' in shape) {
+        // Rectangle shape
+        const rectShape = shape as RectShape
+        width = rectShape.width
+        height = rectShape.height
+      } else {
+        // Circle shape
+        const circleShape = shape as CircleShape
+        width = circleShape.radius * 2
+        height = circleShape.radius * 2
+      }
+
+      if (entityScreenY >= -height * 2 && entityScreenY <= this.config.height) {
         entity.render(ctx, entityScreenX, entityScreenY)
       }
     })

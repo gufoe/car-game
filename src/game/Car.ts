@@ -1,8 +1,15 @@
+import { VisualEffects } from './VisualEffects'
+import type { MapEntityEffect } from './entities/MapEntity'
+import { RectShape } from './shapes/Shape'
 import type { Position, Controls } from './types'
 import { CarDrawer } from './CarDrawer'
 import { WheelTraces } from './WheelTraces'
-import { VisualEffects } from './VisualEffects'
-import type { MapEntityEffect } from './entities/MapEntity'
+
+export interface CarStats {
+  maxSpeed: number
+  acceleration: number
+  handling: number
+}
 
 export class Car {
   private worldPosition: Position   // Position in world coordinates
@@ -42,7 +49,10 @@ export class Car {
 
   private activeEffects: MapEntityEffect[] = []
 
-  constructor(screenWidth: number, screenHeight: number) {
+  private crashed: boolean = false
+  private shape: RectShape
+
+  constructor(screenWidth: number, screenHeight: number, private stats: CarStats) {
     // Start at the bottom center of the screen in world coordinates
     this.worldPosition = {
       x: 0,
@@ -51,6 +61,7 @@ export class Car {
     this.drawer = new CarDrawer()
     this.traces = new WheelTraces()
     this.effects = new VisualEffects()
+    this.shape = new RectShape(this.worldPosition.x, this.worldPosition.y, this.width, this.height)
   }
 
   private getWheelPositions(): { [key: string]: Position } {
@@ -115,6 +126,8 @@ export class Car {
   }
 
   public update(controls: Controls): void {
+    if (this.crashed) return
+
     // Update active effects and remove expired ones
     const now = performance.now()
     this.activeEffects = this.activeEffects.filter(effect => {
@@ -144,6 +157,9 @@ export class Car {
 
     // Update visual effects
     this.effects.update(speed, this.worldPosition, this.rotation)
+
+    // Update shape position to match car position
+    this.shape.setPosition(this.worldPosition.x, this.worldPosition.y)
   }
 
   private updateSteering(controls: Controls): void {
@@ -296,5 +312,17 @@ export class Car {
     })
 
     return this.maxSpeed * maxSpeedMultiplier
+  }
+
+  public crash(): void {
+    this.crashed = true
+  }
+
+  public isCrashed(): boolean {
+    return this.crashed
+  }
+
+  public getShape(): RectShape {
+    return this.shape
   }
 }

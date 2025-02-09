@@ -1,6 +1,7 @@
 import type { Position, RoadConfig } from '../types'
 import type { Car } from '../Car'
 import { MapEntity, type MapEntityEffect } from './MapEntity'
+import { CircleShape, RectShape } from '../shapes/Shape'
 
 export class MapEntityManager {
   private entities: MapEntity[] = []
@@ -36,12 +37,11 @@ export class MapEntityManager {
 
     // Clean up inactive or out-of-view entities
     if (lastCarY !== 0) {
-      this.entities = this.entities.filter(
-        entity =>
-          entity.isActiveEntity() &&
-          entity.position.y > lastCarY - 2000 &&
-          entity.position.y < lastCarY + 1000
-      )
+      this.entities = this.entities.filter(entity => {
+        if (!entity.isActiveEntity()) return false
+        const pos = entity.getShape().getPosition()
+        return pos.y > lastCarY - 2000 && pos.y < lastCarY + 1000
+      })
     }
   }
 
@@ -73,9 +73,7 @@ export class MapEntityManager {
 
     if (powerUpType === 'speedBoost') {
       const speedBoost = new MapEntity({
-        position: { x, y },
-        width: 40,
-        height: 40,
+        shape: new CircleShape(x, y, 20), // Use a circle shape for power-ups
         duration: 5000, // 5 seconds
         draw: (ctx, x, y, width, height) => {
           // Draw speed boost power-up
@@ -114,9 +112,7 @@ export class MapEntityManager {
 
     const createWallSection = (x: number, width: number) => {
       return new MapEntity({
-        position: { x, y },
-        width,
-        height: this.config.obstacleHeight,
+        shape: new RectShape(x, y, width, this.config.obstacleHeight),
         draw: (ctx, x, y, width, height) => {
           // Draw wall section with the same style as before
           ctx.fillStyle = '#4a4a4a'
@@ -145,13 +141,7 @@ export class MapEntityManager {
           ctx.restore()
         },
         onHit: (car) => {
-          // Apply slow down effect on hit
-          const slowEffect: MapEntityEffect = {
-            type: 'maxSpeed',
-            value: 0.5, // 50% speed reduction
-            duration: 2000, // 2 second penalty
-          }
-          car.applyEffect(slowEffect)
+          car.crash() // Signal game over
         }
       })
     }
@@ -175,9 +165,7 @@ export class MapEntityManager {
     const x = minX + Math.random() * (maxX - minX)
 
     const boxObstacle = new MapEntity({
-      position: { x, y },
-      width: this.config.obstacleWidth,
-      height: this.config.obstacleHeight,
+      shape: new RectShape(x, y, this.config.obstacleWidth, this.config.obstacleHeight),
       draw: (ctx, x, y, width, height) => {
         // Draw box obstacle with the same style as before
         ctx.fillStyle = '#4a4a4a'
@@ -206,13 +194,7 @@ export class MapEntityManager {
         ctx.restore()
       },
       onHit: (car) => {
-        // Apply slow down effect on hit
-        const slowEffect: MapEntityEffect = {
-          type: 'maxSpeed',
-          value: 0.5, // 50% speed reduction
-          duration: 2000, // 2 second penalty
-        }
-        car.applyEffect(slowEffect)
+        car.crash() // Signal game over
       }
     })
 
@@ -220,25 +202,16 @@ export class MapEntityManager {
   }
 
   public checkCollision(car: Car): boolean {
-    const carLeft = car.getWorldPosition().x - car.getWidth()/2
-    const carRight = car.getWorldPosition().x + car.getWidth()/2
-    const carTop = car.getWorldPosition().y + car.getHeight()/2
-    const carBottom = car.getWorldPosition().y - car.getHeight()/2
+    const carShape = car.getShape()
+    let hasCollision = false
 
-    let collision = false
     this.entities.forEach(entity => {
-      if (
-        entity.isActiveEntity() &&
-        carRight > entity.position.x &&
-        carLeft < entity.position.x + entity.width &&
-        carBottom < entity.position.y + entity.height &&
-        carTop > entity.position.y
-      ) {
+      if (entity.isActiveEntity() && entity.getShape().collidesWith(carShape)) {
         entity.handleCollision(car)
-        collision = true
+        hasCollision = true
       }
     })
 
-    return collision
+    return hasCollision
   }
 }

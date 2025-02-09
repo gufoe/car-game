@@ -1,5 +1,5 @@
 import type { Controls, GameState } from './types'
-import { Car } from './Car'
+import { Car, type CarStats } from './Car'
 import { Road } from './Road'
 
 export class Game {
@@ -30,8 +30,13 @@ export class Game {
     }
     this.ctx = context
 
-    // Initialize game objects
-    this.car = new Car(canvas.width, canvas.height)
+    // Initialize game objects with default car stats
+    const defaultCarStats: CarStats = {
+      maxSpeed: 10,
+      acceleration: 0.2,
+      handling: 0.8
+    }
+    this.car = new Car(canvas.width, canvas.height, defaultCarStats)
     this.road = new Road(canvas.width, canvas.height)
 
     // Set up event listeners
@@ -129,7 +134,10 @@ export class Game {
       this.gameState.score = Math.floor(this.gameState.distance / 100)
 
       // Check for collisions
-      if (this.road.checkCollision(this.car)) {
+      this.road.checkCollision(this.car)
+
+      // Update game over state based on car's crash state
+      if (this.car.isCrashed()) {
         this.gameState.isGameOver = true
       }
     }
