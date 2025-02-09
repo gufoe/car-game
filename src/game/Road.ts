@@ -31,9 +31,9 @@ export class Road {
     this.obstacleManager.update(this.lastCarY)
   }
 
-  public draw(ctx: CanvasRenderingContext2D, carWorldPos: Position): void {
+  public draw(ctx: CanvasRenderingContext2D, carWorldPos: Position, speed: number = 0): void {
     this.lastCarY = carWorldPos.y
-    this.renderer.draw(ctx, carWorldPos, this.obstacleManager.getObstacles())
+    this.renderer.draw(ctx, carWorldPos, this.obstacleManager.getObstacles(), speed)
   }
 
   public checkCollision(car: Car): boolean {

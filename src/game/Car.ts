@@ -1,6 +1,7 @@
 import type { Position, Controls } from './types'
 import { CarDrawer } from './CarDrawer'
 import { WheelTraces } from './WheelTraces'
+import { VisualEffects } from './VisualEffects'
 
 export class Car {
   private worldPosition: Position   // Position in world coordinates
@@ -13,6 +14,7 @@ export class Car {
   private readonly wheelbase = 60   // Distance between front and rear axles
   private readonly trackWidth = 40  // Distance between left and right wheels
   private readonly traces: WheelTraces
+  private readonly effects: VisualEffects
 
   // Physics constants
   private readonly maxSpeed = 10
@@ -45,6 +47,7 @@ export class Car {
     }
     this.drawer = new CarDrawer()
     this.traces = new WheelTraces()
+    this.effects = new VisualEffects()
   }
 
   private getWheelPositions(): { [key: string]: Position } {
@@ -128,6 +131,10 @@ export class Car {
 
     // Update traces (fade out)
     this.traces.update()
+
+    // Update visual effects
+    const isDrifting = Math.abs(this.lateralVelocity) > 0.5
+    this.effects.update(speed, isDrifting, this.worldPosition, this.rotation)
   }
 
   private updateSteering(controls: Controls): void {
@@ -215,6 +222,10 @@ export class Car {
     const screenY = ctx.canvas.height * 0.8
 
     ctx.save()
+
+    // Draw visual effects first (behind everything)
+    this.effects.draw(ctx, this.worldPosition, this.rotation)
+
     // Move to car's screen position (including world offset)
     ctx.translate(screenX + this.worldPosition.x, screenY)
 

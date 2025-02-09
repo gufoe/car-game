@@ -138,7 +138,7 @@ export class Game {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height)
 
     // Draw game objects (passing car's world position for camera)
-    this.road.draw(this.ctx, this.car.getWorldPosition())
+    this.road.draw(this.ctx, this.car.getWorldPosition(), this.car.getVelocity())
     this.car.draw(this.ctx)
 
     // Draw HUD

@@ -2,6 +2,8 @@ import type { Position, Obstacle, RoadConfig } from './types'
 
 export class RoadRenderer {
   private config: RoadConfig
+  private lightGradient: CanvasGradient | null = null
+  private lastSpeed = 0
 
   constructor(config: RoadConfig) {
     this.config = config
@@ -9,29 +11,70 @@ export class RoadRenderer {
 
   public resize(width: number, height: number): void {
     this.config = { ...this.config, width, height }
+    this.lightGradient = null  // Reset gradient on resize
   }
 
-  public draw(ctx: CanvasRenderingContext2D, carWorldPos: Position, obstacles: Obstacle[]): void {
+  public draw(ctx: CanvasRenderingContext2D, carWorldPos: Position, obstacles: Obstacle[], speed: number = 0): void {
     const screenCenter = {
       x: ctx.canvas.width / 2,
       y: ctx.canvas.height * this.config.screenCenterYRatio
     }
 
-    this.drawBackground(ctx)
-    this.drawRoad(ctx, screenCenter)
+    this.drawBackground(ctx, speed)
+    this.drawRoad(ctx, screenCenter, speed)
     this.drawRoadLines(ctx, carWorldPos, screenCenter)
     this.drawObstacles(ctx, carWorldPos, obstacles, screenCenter)
+
+    // Update last speed for smooth transitions
+    this.lastSpeed = speed
   }
 
-  private drawBackground(ctx: CanvasRenderingContext2D): void {
-    ctx.fillStyle = '#27ae60'
+  private drawBackground(ctx: CanvasRenderingContext2D, speed: number): void {
+    // Use constant values for stable lighting
+    const r = 39
+    const g = 174
+    const b = 96
+
+    ctx.fillStyle = `rgb(${r}, ${g}, ${b})`
     ctx.fillRect(0, 0, this.config.width, this.config.height)
   }
 
-  private drawRoad(ctx: CanvasRenderingContext2D, screenCenter: Position): void {
-    ctx.fillStyle = '#34495e'
+  private drawRoad(ctx: CanvasRenderingContext2D, screenCenter: Position, speed: number): void {
     const roadLeft = screenCenter.x - this.config.roadWidth/2
+
+    // Create lighting gradient if not exists or needs update
+    if (!this.lightGradient) {
+      this.lightGradient = ctx.createLinearGradient(
+        roadLeft, 0,
+        roadLeft + this.config.roadWidth, 0
+      )
+    }
+
+    // Use constant values for stable road color
+    const baseColor = 52
+    const edgeColor = Math.max(30, baseColor - 15)
+
+    ctx.fillStyle = `rgb(${baseColor}, ${baseColor}, ${baseColor})`
     ctx.fillRect(roadLeft, 0, this.config.roadWidth, this.config.height)
+
+    // Add road edge shadows with constant intensity
+    const shadowWidth = 20
+    const gradient = ctx.createLinearGradient(roadLeft - shadowWidth, 0, roadLeft + shadowWidth, 0)
+    gradient.addColorStop(0, 'rgba(0, 0, 0, 0)')
+    gradient.addColorStop(1, 'rgba(0, 0, 0, 0.3)')
+
+    ctx.fillStyle = gradient
+    ctx.fillRect(roadLeft - shadowWidth, 0, shadowWidth, this.config.height)
+
+    const rightGradient = ctx.createLinearGradient(
+      roadLeft + this.config.roadWidth - shadowWidth, 0,
+      roadLeft + this.config.roadWidth + shadowWidth, 0
+    )
+    rightGradient.addColorStop(0, 'rgba(0, 0, 0, 0.3)')
+    rightGradient.addColorStop(1, 'rgba(0, 0, 0, 0)')
+
+    ctx.fillStyle = rightGradient
+    ctx.fillRect(roadLeft + this.config.roadWidth, 0, shadowWidth, this.config.height)
   }
 
   private drawRoadLines(
