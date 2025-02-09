@@ -118,8 +118,8 @@ export class Game {
       // Update car
       this.car.update(this.controls)
 
-      // Update road (just for obstacle generation)
-      this.road.update()
+      // Update road (for entity generation and updates)
+      this.road.update(timestamp)
 
       // Get car's world position for camera and scoring
       const worldPos = this.car.getWorldPosition()

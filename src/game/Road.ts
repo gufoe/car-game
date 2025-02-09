@@ -1,14 +1,15 @@
 import type { Position, RoadConfig } from './types'
 import { DEFAULT_ROAD_CONFIG } from './types'
 import { Car } from './Car'
-import { ObstacleManager } from './ObstacleManager'
+import { MapEntityManager } from './entities/MapEntityManager'
 import { RoadRenderer } from './RoadRenderer'
 
 export class Road {
   private config: RoadConfig
   private lastCarY = 0
-  private obstacleManager: ObstacleManager
+  private entityManager: MapEntityManager
   private renderer: RoadRenderer
+  private lastTimestamp = 0
 
   constructor(width?: number, height?: number, config: Partial<RoadConfig> = {}) {
     this.config = {
@@ -18,7 +19,7 @@ export class Road {
       height: height ?? DEFAULT_ROAD_CONFIG.height
     }
 
-    this.obstacleManager = new ObstacleManager(this.config)
+    this.entityManager = new MapEntityManager(this.config)
     this.renderer = new RoadRenderer(this.config)
   }
 
@@ -27,20 +28,18 @@ export class Road {
     this.renderer.resize(width, height)
   }
 
-  public update(): void {
-    this.obstacleManager.update(this.lastCarY)
+  public update(timestamp = 0): void {
+    const deltaTime = timestamp - this.lastTimestamp
+    this.lastTimestamp = timestamp
+    this.entityManager.update(this.lastCarY, deltaTime)
   }
 
   public draw(ctx: CanvasRenderingContext2D, carWorldPos: Position, speed: number = 0): void {
     this.lastCarY = carWorldPos.y
-    this.renderer.draw(ctx, carWorldPos, this.obstacleManager.getObstacles(), speed)
+    this.renderer.draw(ctx, carWorldPos, this.entityManager.getEntities(), speed)
   }
 
   public checkCollision(car: Car): boolean {
-    return this.obstacleManager.checkCollision(
-      car.getWorldPosition(),
-      car.getWidth(),
-      car.getHeight()
-    )
+    return this.entityManager.checkCollision(car)
   }
 }

@@ -1,14 +1,11 @@
-export interface Position {
-  x: number;
-  y: number;
-}
+import type { Position } from '../game/types'
+
+export type StatType = 'speed' | 'acceleration' | 'handling'
 
 export interface Velocity {
   speed: number;
   rotation: number;
 }
-
-export type StatType = 'handling' | 'maxSpeed' | 'acceleration';
 
 export interface Upgrade {
   position: Position;
@@ -19,9 +16,9 @@ export interface Upgrade {
 }
 
 export interface CarStats {
-  handling: number;    // 0-100
-  maxSpeed: number;    // 0-100
-  acceleration: number; // 0-100
+  maxSpeed: number;
+  acceleration: number;
+  handling: number;
 }
 
 export interface Car {

@@ -2,6 +2,7 @@ import type { Position, Controls } from './types'
 import { CarDrawer } from './CarDrawer'
 import { WheelTraces } from './WheelTraces'
 import { VisualEffects } from './VisualEffects'
+import type { MapEntityEffect } from './entities/MapEntity'
 
 export class Car {
   private worldPosition: Position   // Position in world coordinates
@@ -38,6 +39,8 @@ export class Car {
   private slipAngle = 0
 
   private readonly drawer: CarDrawer
+
+  private activeEffects: MapEntityEffect[] = []
 
   constructor(screenWidth: number, screenHeight: number) {
     // Start at the bottom center of the screen in world coordinates
@@ -112,6 +115,13 @@ export class Car {
   }
 
   public update(controls: Controls): void {
+    // Update active effects and remove expired ones
+    const now = performance.now()
+    this.activeEffects = this.activeEffects.filter(effect => {
+      if (!effect.startTime) return false
+      return now - effect.startTime < effect.duration
+    })
+
     this.updateSteering(controls)
     this.updateVelocity(controls)
     this.updatePhysics()
@@ -133,8 +143,7 @@ export class Car {
     this.traces.update()
 
     // Update visual effects
-    const isDrifting = Math.abs(this.lateralVelocity) > 0.5
-    this.effects.update(speed, isDrifting, this.worldPosition, this.rotation)
+    this.effects.update(speed, this.worldPosition, this.rotation)
   }
 
   private updateSteering(controls: Controls): void {
@@ -154,17 +163,18 @@ export class Car {
   }
 
   private updateVelocity(controls: Controls): void {
-    // Update forward velocity with acceleration and deceleration
+    const effectiveMaxSpeed = this.getEffectiveMaxSpeed()
+
     if (controls.up) {
-      this.velocity = Math.min(this.velocity + this.acceleration, this.maxSpeed)
+      this.velocity = Math.min(this.velocity + this.acceleration, effectiveMaxSpeed)
     } else if (controls.down) {
-      this.velocity = Math.max(this.velocity - this.acceleration, -this.maxSpeed / 2)
+      this.velocity = Math.max(this.velocity - this.acceleration, -effectiveMaxSpeed * 0.5)
     } else {
-      // Natural deceleration
-      if (Math.abs(this.velocity) < this.deceleration) {
-        this.velocity = 0
-      } else {
-        this.velocity -= Math.sign(this.velocity) * this.deceleration
+      // Apply drag when no acceleration input
+      if (this.velocity > 0) {
+        this.velocity = Math.max(0, this.velocity - this.acceleration * 0.5)
+      } else if (this.velocity < 0) {
+        this.velocity = Math.min(0, this.velocity + this.acceleration * 0.5)
       }
     }
   }
@@ -224,7 +234,7 @@ export class Car {
     ctx.save()
 
     // Draw visual effects first (behind everything)
-    this.effects.draw(ctx, this.worldPosition, this.rotation)
+    this.effects.draw(ctx, this.worldPosition)
 
     // Move to car's screen position (including world offset)
     ctx.translate(screenX + this.worldPosition.x, screenY)
@@ -264,5 +274,27 @@ export class Car {
 
   public clearTraces(): void {
     this.traces.clear()
+  }
+
+  public applyEffect(effect: MapEntityEffect): void {
+    effect.startTime = performance.now()
+    this.activeEffects.push(effect)
+  }
+
+  public getActiveEffects(): MapEntityEffect[] {
+    return this.activeEffects
+  }
+
+  private getEffectiveMaxSpeed(): number {
+    let maxSpeedMultiplier = 1
+    const now = performance.now()
+
+    this.activeEffects.forEach(effect => {
+      if (effect.type === 'maxSpeed' && effect.startTime && now - effect.startTime < effect.duration) {
+        maxSpeedMultiplier *= effect.value
+      }
+    })
+
+    return this.maxSpeed * maxSpeedMultiplier
   }
 }

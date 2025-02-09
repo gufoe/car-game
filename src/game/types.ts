@@ -16,12 +16,6 @@ export interface GameState {
   isGameOver: boolean
 }
 
-export interface Obstacle {
-  position: Position
-  width: number
-  height: number
-}
-
 export interface RoadConfig {
   width: number
   height: number
