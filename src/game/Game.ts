@@ -1,12 +1,14 @@
 import type { Controls, GameState } from './types'
 import { Car, type CarStats } from './Car'
 import { Road } from './Road'
+import { Camera } from './Camera'
 
 export class Game {
   private canvas: HTMLCanvasElement
   private ctx: CanvasRenderingContext2D
   private car: Car
   private road: Road
+  private camera: Camera
   private controls: Controls = {
     up: false,
     down: false,
@@ -20,7 +22,6 @@ export class Game {
   }
   private animationFrameId: number | null = null
   private lastTimestamp = 0
-  private cameraOffset = 0
   private isDebugMode = false
 
   constructor(canvas: HTMLCanvasElement) {
@@ -39,6 +40,7 @@ export class Game {
     }
     this.car = new Car(canvas.width, canvas.height, defaultCarStats)
     this.road = new Road(canvas.width, canvas.height)
+    this.camera = new Camera(canvas.width, canvas.height)
 
     // Set up event listeners
     window.addEventListener('keydown', this.handleKeyDown.bind(this))
@@ -107,6 +109,9 @@ export class Game {
 
     // Update road size
     this.road.resize(this.canvas.width, this.canvas.height)
+
+    // Update camera
+    this.camera.updateScreenSize(this.canvas.width, this.canvas.height)
   }
 
   public start(): void {
@@ -139,6 +144,9 @@ export class Game {
       // Get car's world position for camera and scoring
       const worldPos = this.car.getWorldPosition()
 
+      // Update camera
+      this.camera.update(worldPos, this.car.getVelocity())
+
       // Update score based on distance traveled
       this.gameState.distance = Math.abs(worldPos.y)
       this.gameState.score = Math.floor(this.gameState.distance / 100)
@@ -157,14 +165,10 @@ export class Game {
 
     // Set up camera transformation
     this.ctx.save()
-    const screenX = this.canvas.width / 2
-    const screenY = this.canvas.height * 0.8
-    const carWorldPos = this.car.getWorldPosition()
-    // Translate to screen center and offset by car's Y position to create camera follow effect
-    this.ctx.translate(screenX, screenY - carWorldPos.y)
+    this.camera.applyTransform(this.ctx)
 
     // Draw game objects (passing car's world position for camera)
-    this.road.draw(this.ctx, carWorldPos, this.car.getVelocity(), this.isDebugMode)
+    this.road.draw(this.ctx, this.car.getWorldPosition(), this.car.getVelocity(), this.isDebugMode)
     if (!this.isDebugMode) {
       this.car.draw(this.ctx)
     }
