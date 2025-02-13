@@ -6,6 +6,8 @@ export class RoadRenderer {
   private config: RoadConfig
   private lightGradient: CanvasGradient | null = null
   private lastSpeed = 0
+  private readonly VISIBLE_DISTANCE = 2000  // How far ahead/behind to render
+  private readonly CHUNK_SIZE = 4000  // Total size of the visible road chunk
 
   constructor(config: RoadConfig) {
     this.config = config
@@ -42,14 +44,19 @@ export class RoadRenderer {
   }
 
   private drawRoad(ctx: CanvasRenderingContext2D, carWorldPos: Position): void {
-    // Draw road background
+    // Draw road background relative to car position
+    const visibleStart = Math.floor((carWorldPos.y - this.VISIBLE_DISTANCE) / this.CHUNK_SIZE) * this.CHUNK_SIZE
+    const chunksNeeded = Math.ceil((this.VISIBLE_DISTANCE * 2) / this.CHUNK_SIZE) + 1
+
     ctx.fillStyle = '#303030'
-    ctx.fillRect(
-      -this.config.roadWidth/2,
-      -2000,  // Draw road ahead of car
-      this.config.roadWidth,
-      4000  // Draw enough road to cover visible area
-    )
+    for (let i = 0; i < chunksNeeded; i++) {
+      ctx.fillRect(
+        -this.config.roadWidth/2,
+        visibleStart + (i * this.CHUNK_SIZE),
+        this.config.roadWidth,
+        this.CHUNK_SIZE
+      )
+    }
   }
 
   private drawRoadLines(ctx: CanvasRenderingContext2D, carWorldPos: Position): void {
@@ -57,8 +64,8 @@ export class RoadRenderer {
     ctx.setLineDash([40, 40])
     ctx.lineWidth = 5
 
-    const visibleTop = -2000
-    const visibleBottom = 2000
+    const visibleTop = carWorldPos.y - this.VISIBLE_DISTANCE
+    const visibleBottom = carWorldPos.y + this.VISIBLE_DISTANCE
 
     const firstLineY = Math.floor(visibleTop / this.config.lineSpacing) * this.config.lineSpacing
     const lastLineY = Math.ceil(visibleBottom / this.config.lineSpacing) * this.config.lineSpacing

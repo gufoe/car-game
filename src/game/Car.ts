@@ -68,7 +68,7 @@ export class Car {
     const halfTrack = this.trackWidth / 2
     const halfBase = this.wheelbase / 2
 
-    // Calculate wheel positions relative to car center
+    // Calculate wheel positions relative to car center, matching CarDrawer dimensions
     const frontLeft = {
       x: -halfTrack,
       y: -halfBase
@@ -91,37 +91,39 @@ export class Car {
       const cos = Math.cos(this.steeringAngle)
       const sin = Math.sin(this.steeringAngle)
 
-      // Rotate front wheels
-      const frontLeftX = frontLeft.x
-      frontLeft.x = frontLeftX * cos - frontLeft.y * sin
-      frontLeft.y = frontLeftX * sin + frontLeft.y * cos
+      // Rotate front wheels around their own axis
+      const rotateWheel = (wheel: Position) => {
+        const x = wheel.x
+        const y = wheel.y
+        return {
+          x: x * cos - y * sin,
+          y: x * sin + y * cos
+        }
+      }
 
-      const frontRightX = frontRight.x
-      frontRight.x = frontRightX * cos - frontRight.y * sin
-      frontRight.y = frontRightX * sin + frontRight.y * cos
+      const rotatedFrontLeft = rotateWheel(frontLeft)
+      frontLeft.x = rotatedFrontLeft.x
+      frontLeft.y = rotatedFrontLeft.y
+
+      const rotatedFrontRight = rotateWheel(frontRight)
+      frontRight.x = rotatedFrontRight.x
+      frontRight.y = rotatedFrontRight.y
     }
 
-    // Transform to world coordinates
+    // Transform to car's local rotated space
     const cos = Math.cos(this.rotation)
     const sin = Math.sin(this.rotation)
 
+    const transformToLocal = (pos: Position): Position => ({
+      x: pos.x * cos - pos.y * sin,
+      y: pos.x * sin + pos.y * cos
+    })
+
     return {
-      frontLeft: {
-        x: this.worldPosition.x + (frontLeft.x * cos - frontLeft.y * sin),
-        y: this.worldPosition.y + (frontLeft.x * sin + frontLeft.y * cos)
-      },
-      frontRight: {
-        x: this.worldPosition.x + (frontRight.x * cos - frontRight.y * sin),
-        y: this.worldPosition.y + (frontRight.x * sin + frontRight.y * cos)
-      },
-      rearLeft: {
-        x: this.worldPosition.x + (rearLeft.x * cos - rearLeft.y * sin),
-        y: this.worldPosition.y + (rearLeft.x * sin + rearLeft.y * cos)
-      },
-      rearRight: {
-        x: this.worldPosition.x + (rearRight.x * cos - rearRight.y * sin),
-        y: this.worldPosition.y + (rearRight.x * sin + rearRight.y * cos)
-      }
+      frontLeft: transformToLocal(frontLeft),
+      frontRight: transformToLocal(frontRight),
+      rearLeft: transformToLocal(rearLeft),
+      rearRight: transformToLocal(rearRight)
     }
   }
 
@@ -148,7 +150,11 @@ export class Car {
 
     if (speed > 0.1 || drift > 0.1) {
       Object.entries(wheelPositions).forEach(([wheel, pos]) => {
-        this.traces.addTracePoint(wheel, pos, intensity)
+        // Add wheel traces in world space
+        this.traces.addTracePoint(wheel, {
+          x: this.worldPosition.x + pos.x,
+          y: this.worldPosition.y + pos.y
+        }, intensity)
       })
     }
 
