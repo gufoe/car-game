@@ -24,6 +24,13 @@ export class Game {
   private lastTimestamp = 0
   private isDebugMode = false
 
+  // Define constant car stats
+  private readonly defaultCarStats: CarStats = {
+    maxSpeed: 6,
+    acceleration: 0.15,
+    handling: 0.8
+  }
+
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
     const context = canvas.getContext('2d')
@@ -33,12 +40,9 @@ export class Game {
     this.ctx = context
 
     // Initialize game objects with default car stats
-    const defaultCarStats: CarStats = {
-      maxSpeed: 10,
-      acceleration: 0.2,
-      handling: 0.8
-    }
-    this.car = new Car(canvas.width, canvas.height, defaultCarStats)
+    this.car = new Car(canvas.width, canvas.height, this.defaultCarStats, (points: number) => {
+      this.gameState.score += points
+    })
     this.road = new Road(canvas.width, canvas.height)
     this.camera = new Camera(canvas.width, canvas.height)
 
@@ -77,6 +81,11 @@ export class Game {
       case 'd':
       case 'arrowright':
         this.controls.right = true
+        break
+      case ' ': // Space key
+        if (this.gameState.isGameOver) {
+          this.restart()
+        }
         break
     }
   }
@@ -118,8 +127,11 @@ export class Game {
     this.gameState.isGameOver = false
     this.gameState.score = 0
     this.gameState.distance = 0
+    // Reset timestamp to current time to avoid large deltaTime on first frame
     this.lastTimestamp = performance.now()
-    this.animate()
+    // Stop any existing animation before starting a new one
+    this.stop()
+    this.animate(this.lastTimestamp)
   }
 
   public stop(): void {
@@ -130,13 +142,14 @@ export class Game {
   }
 
   private animate(timestamp = 0): void {
-    const deltaTime = timestamp - this.lastTimestamp
+    // Cap deltaTime to prevent huge jumps
+    const deltaTime = Math.min(timestamp - this.lastTimestamp, 100)
     this.lastTimestamp = timestamp
 
     // Update game state
     if (!this.gameState.isGameOver) {
-      // Update car
-      this.car.update(this.controls)
+      // Update car with deltaTime
+      this.car.update(this.controls, deltaTime)
 
       // Update road (for entity generation and updates)
       this.road.update(timestamp)
@@ -147,9 +160,8 @@ export class Game {
       // Update camera
       this.camera.update(worldPos, this.car.getVelocity())
 
-      // Update score based on distance traveled
+      // Update distance score (separate from points from hitting cyclists)
       this.gameState.distance = Math.abs(worldPos.y)
-      this.gameState.score = Math.floor(this.gameState.distance / 100)
 
       // Check for collisions
       this.road.checkCollision(this.car)
@@ -204,6 +216,30 @@ export class Game {
     }
 
     this.ctx.restore()
+  }
+
+  private restart(): void {
+    // Reset car with the same default stats
+    this.car = new Car(this.canvas.width, this.canvas.height, this.defaultCarStats, (points: number) => {
+      this.gameState.score += points
+    })
+
+    // Reset road
+    this.road = new Road(this.canvas.width, this.canvas.height)
+
+    // Reset camera
+    this.camera = new Camera(this.canvas.width, this.canvas.height)
+
+    // Reset controls
+    this.controls = {
+      up: false,
+      down: false,
+      left: false,
+      right: false
+    }
+
+    // Start new game
+    this.start()
   }
 
   public getGameState(): GameState {

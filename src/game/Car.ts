@@ -13,8 +13,10 @@ export interface CarStats {
 
 export class Car {
   private worldPosition: Position   // Position in world coordinates
-  private readonly width = 50
-  private readonly height = 90
+  private readonly baseWidth = 50
+  private readonly baseHeight = 90
+  private width = this.baseWidth
+  private height = this.baseHeight
   private rotation = 0             // Angle in radians, 0 means pointing up
   private velocity = 0             // Current speed
   private lateralVelocity = 0      // Sideways velocity for drift
@@ -25,9 +27,8 @@ export class Car {
   private readonly effects: VisualEffects
 
   // Physics constants
-  private readonly maxSpeed = 10
-  private readonly maxReverseSpeed = 5
-  private readonly acceleration = 0.2
+  private readonly maxSpeed: number
+  private readonly maxReverseSpeed: number
   private readonly deceleration = 0.1
   private readonly steeringSpeed = Math.PI / 32
   private readonly maxSteeringAngle = Math.PI / 4
@@ -51,8 +52,9 @@ export class Car {
 
   private crashed: boolean = false
   private shape: RectShape
+  private onScoreUpdate?: (points: number) => void
 
-  constructor(screenWidth: number, screenHeight: number, private stats: CarStats) {
+  constructor(screenWidth: number, screenHeight: number, private stats: CarStats, onScoreUpdate?: (points: number) => void) {
     // Start at the bottom center of the screen in world coordinates
     this.worldPosition = {
       x: 0,
@@ -61,7 +63,28 @@ export class Car {
     this.drawer = new CarDrawer()
     this.traces = new WheelTraces()
     this.effects = new VisualEffects()
+
+    // Reset dimensions to base values
+    this.width = this.baseWidth
+    this.height = this.baseHeight
+
+    // Reset shape with initial dimensions
     this.shape = new RectShape(this.worldPosition.x, this.worldPosition.y, this.width, this.height)
+    this.onScoreUpdate = onScoreUpdate
+
+    // Reset all physics values
+    this.velocity = 0
+    this.lateralVelocity = 0
+    this.steeringAngle = 0
+    this.rotation = 0
+    this.crashed = false
+
+    // Clear any active effects
+    this.activeEffects = []
+
+    // Initialize physics constants from stats
+    this.maxSpeed = stats.maxSpeed
+    this.maxReverseSpeed = stats.maxSpeed * 0.5
   }
 
   private getWheelPositions(): { [key: string]: Position } {
@@ -127,19 +150,20 @@ export class Car {
     }
   }
 
-  public update(controls: Controls): void {
+  public update(controls: Controls, deltaTime: number = 16): void {
     if (this.crashed) return
 
     // Update active effects and remove expired ones
     const now = performance.now()
     this.activeEffects = this.activeEffects.filter(effect => {
       if (!effect.startTime) return false
-      return now - effect.startTime < effect.duration
+      // Keep permanent effects (duration: 0) but filter out expired timed effects
+      return effect.duration === 0 || now - effect.startTime < effect.duration
     })
 
     this.updateSteering(controls)
-    this.updateVelocity(controls)
-    this.updatePhysics()
+    this.updateVelocity(controls, deltaTime)
+    this.updatePhysics(deltaTime)
     this.updatePosition()
 
     // Add trace points for each wheel
@@ -184,26 +208,29 @@ export class Car {
     }
   }
 
-  private updateVelocity(controls: Controls): void {
+  private updateVelocity(controls: Controls, deltaTime: number): void {
     const effectiveMaxSpeed = this.getEffectiveMaxSpeed()
+    const normalizedDelta = deltaTime / 16 // Normalize to 60fps
+    const baseAcceleration = this.stats.acceleration // Use base acceleration from stats
 
     if (controls.up) {
-      this.velocity = Math.min(this.velocity + this.acceleration, effectiveMaxSpeed)
+      this.velocity = Math.min(this.velocity + baseAcceleration * normalizedDelta, effectiveMaxSpeed)
     } else if (controls.down) {
-      this.velocity = Math.max(this.velocity - this.acceleration, -effectiveMaxSpeed * 0.5)
+      this.velocity = Math.max(this.velocity - baseAcceleration * normalizedDelta, -effectiveMaxSpeed * 0.5)
     } else {
       // Apply drag when no acceleration input
       if (this.velocity > 0) {
-        this.velocity = Math.max(0, this.velocity - this.acceleration * 0.5)
+        this.velocity = Math.max(0, this.velocity - baseAcceleration * 0.5 * normalizedDelta)
       } else if (this.velocity < 0) {
-        this.velocity = Math.min(0, this.velocity + this.acceleration * 0.5)
+        this.velocity = Math.min(0, this.velocity + baseAcceleration * 0.5 * normalizedDelta)
       }
     }
   }
 
-  private updatePhysics(): void {
+  private updatePhysics(deltaTime: number): void {
     if (Math.abs(this.velocity) < 0.1) return  // Skip physics at very low speeds
 
+    const normalizedDelta = deltaTime / 16 // Normalize to 60fps
     const isReversing = this.velocity < 0
     const speedFactor = Math.min(Math.abs(this.velocity) / (isReversing ? this.maxReverseSpeed : this.maxSpeed), 1)
 
@@ -222,7 +249,7 @@ export class Car {
 
     // Apply weight transfer effect
     const weightTransferEffect = this.weightTransfer * speedFactor * Math.abs(this.steeringAngle)
-    const effectiveTurnRate = idealTurnRate * gripMultiplier * (1 - weightTransferEffect)
+    const effectiveTurnRate = idealTurnRate * gripMultiplier * (1 - weightTransferEffect) * normalizedDelta
 
     // Update rotation
     this.rotation += effectiveTurnRate
@@ -232,7 +259,7 @@ export class Car {
     this.lateralVelocity = turnForce * Math.sign(this.steeringAngle) * this.driftFactor
 
     // Decay lateral velocity
-    this.lateralVelocity *= 0.95
+    this.lateralVelocity *= Math.pow(0.95, normalizedDelta)
   }
 
   private updatePosition(): void {
@@ -339,6 +366,18 @@ export class Car {
   public applyEffect(effect: MapEntityEffect): void {
     effect.startTime = performance.now()
     this.activeEffects.push(effect)
+
+    // Handle instant score effects
+    if (effect.type === 'score' && this.onScoreUpdate) {
+      this.onScoreUpdate(effect.value)
+    }
+    // Handle instant size effects
+    else if (effect.type === 'size') {
+      // Increase height (length) of the car
+      this.height = this.baseHeight + effect.value
+      // Update shape with new dimensions
+      this.updatePosition()
+    }
   }
 
   public getActiveEffects(): MapEntityEffect[] {
@@ -349,9 +388,19 @@ export class Car {
     let maxSpeedMultiplier = 1
     const now = performance.now()
 
+    // Only consider active, non-expired effects
+    this.activeEffects = this.activeEffects.filter(effect => {
+      if (!effect.startTime) return false
+      return effect.duration === 0 || now - effect.startTime < effect.duration
+    })
+
+    // Get the highest active speed boost effect
     this.activeEffects.forEach(effect => {
-      if (effect.type === 'maxSpeed' && effect.startTime && now - effect.startTime < effect.duration) {
-        maxSpeedMultiplier *= effect.value
+      if (effect.type === 'maxSpeed' && effect.startTime) {
+        // Only apply temporary speed effects, ignore permanent ones
+        if (effect.duration > 0 && now - effect.startTime < effect.duration) {
+          maxSpeedMultiplier = Math.max(maxSpeedMultiplier, effect.value)
+        }
       }
     })
 

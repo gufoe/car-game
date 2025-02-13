@@ -29,6 +29,13 @@ export interface RoadConfig {
   screenCenterYRatio: number
 }
 
+export interface MapEntityEffect {
+  type: 'maxSpeed' | 'score' | 'size'
+  value: number
+  duration: number
+  startTime?: number
+}
+
 // Default configuration that can be used across the game
 export const DEFAULT_ROAD_CONFIG: RoadConfig = {
   width: 800,
