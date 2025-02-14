@@ -3,7 +3,6 @@ import { DEFAULT_ROAD_CONFIG } from './types'
 import { Car } from './Car'
 import { MapEntityManager } from './entities/MapEntityManager'
 import { RoadRenderer } from './RoadRenderer'
-import { CircleShape, RectShape } from './shapes/Shape'
 
 export class Road {
   private config: RoadConfig

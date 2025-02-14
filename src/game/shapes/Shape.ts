@@ -1,40 +1,53 @@
 import type { Position } from '../types'
 
-export interface IShape {
-  collidesWith(other: IShape): boolean
-  collidesWithRect(rect: RectShape): boolean
-  collidesWithCircle(circle: CircleShape): boolean
-  getPosition(): { x: number, y: number }
+// Shape type definitions
+export interface ShapeBase {
+  type: string
+  getPosition(): Position
   setPosition(x: number, y: number): void
+  collidesWith(other: Shape): boolean
   debugDraw(ctx: CanvasRenderingContext2D): void
 }
 
-export interface IRectShape extends IShape {
-  readonly width: number
-  readonly height: number
-  readonly rotation: number
-  getCorners(): { x: number, y: number }[]
+export interface RectShapeData extends ShapeBase {
+  type: 'rect'
+  width: number
+  height: number
+  rotation?: number
 }
 
-export interface ICircleShape extends IShape {
-  readonly radius: number
+export interface CircleShapeData extends ShapeBase {
+  type: 'circle'
+  radius: number
 }
 
-export abstract class Shape implements IShape {
-  public x: number
-  public y: number
+export type Shape = RectShapeData | CircleShapeData
+
+export function isRect(shape: Shape): shape is RectShapeData {
+  return shape.type === 'rect'
+}
+
+export function isCircle(shape: Shape): shape is CircleShapeData {
+  return shape.type === 'circle'
+}
+
+// Shape implementations
+export abstract class ShapeImpl {
+  protected x: number
+  protected y: number
 
   constructor(x: number, y: number) {
     this.x = x
     this.y = y
   }
 
-  abstract collidesWith(other: Shape): boolean
-  abstract collidesWithRect(rect: RectShape): boolean
-  abstract collidesWithCircle(circle: CircleShape): boolean
+  abstract collidesWith(other: ShapeImpl): boolean
+  abstract collidesWithRect(rect: RectShapeImpl): boolean
+  abstract collidesWithCircle(circle: CircleShapeImpl): boolean
   abstract debugDraw(ctx: CanvasRenderingContext2D): void
+  abstract getShapeData(): Shape
 
-  getPosition(): { x: number, y: number } {
+  getPosition(): Position {
     return { x: this.x, y: this.y }
   }
 
@@ -44,47 +57,59 @@ export abstract class Shape implements IShape {
   }
 }
 
-export class RectShape extends Shape implements IRectShape {
-  private corners: { x: number, y: number }[] = []
+export class RectShapeImpl extends ShapeImpl {
+  private corners: Position[] = []
 
   constructor(
     x: number,
     y: number,
-    public readonly width: number,
-    public readonly height: number,
-    public readonly rotation: number = 0,
-    corners?: { x: number, y: number }[]
+    private readonly width: number,
+    private readonly height: number,
+    private readonly rotation: number = 0,
+    corners?: Position[]
   ) {
     super(x, y)
     if (corners) {
       this.corners = corners
     } else {
-      // Calculate corners for a non-rotated rectangle
-      const halfWidth = width / 2
-      const halfHeight = height / 2
-      this.corners = [
-        { x: x - halfWidth, y: y - halfHeight },
-        { x: x + halfWidth, y: y - halfHeight },
-        { x: x + halfWidth, y: y + halfHeight },
-        { x: x - halfWidth, y: y + halfHeight }
-      ]
+      this.calculateCorners()
     }
   }
 
-  getCorners(): { x: number, y: number }[] {
-    return this.corners
+  private calculateCorners(): void {
+    const halfWidth = this.width / 2
+    const halfHeight = this.height / 2
+    this.corners = [
+      { x: this.x - halfWidth, y: this.y - halfHeight },
+      { x: this.x + halfWidth, y: this.y - halfHeight },
+      { x: this.x + halfWidth, y: this.y + halfHeight },
+      { x: this.x - halfWidth, y: this.y + halfHeight }
+    ]
+  }
+
+  getShapeData(): RectShapeData {
+    return {
+      type: 'rect',
+      width: this.width,
+      height: this.height,
+      rotation: this.rotation,
+      getPosition: () => this.getPosition(),
+      setPosition: (x, y) => this.setPosition(x, y),
+      collidesWith: (other) => this.collidesWith(other as any),
+      debugDraw: (ctx) => this.debugDraw(ctx)
+    }
   }
 
   collidesWith(other: Shape): boolean {
-    if (other instanceof RectShape) {
+    if (other instanceof RectShapeImpl) {
       return this.collidesWithRect(other)
-    } else if (other instanceof CircleShape) {
+    } else if (other instanceof CircleShapeImpl) {
       return this.collidesWithCircle(other)
     }
     return false
   }
 
-  collidesWithRect(rect: RectShape): boolean {
+  collidesWithRect(rect: RectShapeImpl): boolean {
     // Separating Axis Theorem (SAT) for oriented rectangle collision
     const axes = this.getAxes().concat(rect.getAxes())
 
@@ -100,9 +125,9 @@ export class RectShape extends Shape implements IRectShape {
     return true
   }
 
-  private getAxes(): { x: number, y: number }[] {
-    const axes: { x: number, y: number }[] = []
-    const corners = this.getCorners()
+  private getAxes(): Position[] {
+    const axes: Position[] = []
+    const corners = this.corners
 
     // Get all four axes from this rectangle
     for (let i = 0; i < corners.length; i++) {
@@ -128,11 +153,11 @@ export class RectShape extends Shape implements IRectShape {
     return axes
   }
 
-  private project(axis: { x: number, y: number }): { min: number, max: number } {
+  private project(axis: Position): { min: number, max: number } {
     let min = Number.POSITIVE_INFINITY
     let max = Number.NEGATIVE_INFINITY
 
-    const corners = this.getCorners()
+    const corners = this.corners
     for (const corner of corners) {
       const proj = corner.x * axis.x + corner.y * axis.y
       min = Math.min(min, proj)
@@ -146,9 +171,9 @@ export class RectShape extends Shape implements IRectShape {
     return !(p1.max < p2.min || p2.max < p1.min)
   }
 
-  collidesWithCircle(circle: CircleShape): boolean {
+  collidesWithCircle(circle: CircleShapeImpl): boolean {
     // Find the closest point on the oriented rectangle to the circle's center
-    const corners = this.getCorners()
+    const corners = this.corners
     let closestDist = Number.POSITIVE_INFINITY
     let closestPoint = { x: 0, y: 0 }
 
@@ -170,10 +195,10 @@ export class RectShape extends Shape implements IRectShape {
   }
 
   private closestPointOnLine(
-    p1: { x: number, y: number },
-    p2: { x: number, y: number },
-    point: { x: number, y: number }
-  ): { x: number, y: number } {
+    p1: Position,
+    p2: Position,
+    point: Position
+  ): Position {
     const dx = p2.x - p1.x
     const dy = p2.y - p1.y
     const length2 = dx * dx + dy * dy
@@ -194,7 +219,7 @@ export class RectShape extends Shape implements IRectShape {
 
     // Draw the oriented rectangle
     ctx.beginPath()
-    const corners = this.getCorners()
+    const corners = this.corners
     ctx.moveTo(corners[0].x, corners[0].y)
     for (let i = 1; i < corners.length; i++) {
       ctx.lineTo(corners[i].x, corners[i].y)
@@ -210,25 +235,40 @@ export class RectShape extends Shape implements IRectShape {
   }
 }
 
-export class CircleShape extends Shape implements ICircleShape {
-  constructor(x: number, y: number, public readonly radius: number) {
+export class CircleShapeImpl extends ShapeImpl {
+  constructor(
+    x: number,
+    y: number,
+    private readonly radius: number
+  ) {
     super(x, y)
   }
 
+  getShapeData(): CircleShapeData {
+    return {
+      type: 'circle',
+      radius: this.radius,
+      getPosition: () => this.getPosition(),
+      setPosition: (x, y) => this.setPosition(x, y),
+      collidesWith: (other) => this.collidesWith(other as any),
+      debugDraw: (ctx) => this.debugDraw(ctx)
+    }
+  }
+
   collidesWith(other: Shape): boolean {
-    if (other instanceof RectShape) {
+    if (other instanceof RectShapeImpl) {
       return this.collidesWithRect(other)
-    } else if (other instanceof CircleShape) {
+    } else if (other instanceof CircleShapeImpl) {
       return this.collidesWithCircle(other)
     }
     return false
   }
 
-  collidesWithRect(rect: RectShape): boolean {
+  collidesWithRect(rect: RectShapeImpl): boolean {
     return rect.collidesWithCircle(this)
   }
 
-  collidesWithCircle(circle: CircleShape): boolean {
+  collidesWithCircle(circle: CircleShapeImpl): boolean {
     const dx = this.x - circle.x
     const dy = this.y - circle.y
     const distance = Math.sqrt(dx * dx + dy * dy)

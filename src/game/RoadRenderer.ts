@@ -1,6 +1,5 @@
 import type { Position, RoadConfig } from './types'
 import type { MapEntity } from './entities/MapEntity'
-import { RectShape, CircleShape } from './shapes/Shape'
 
 export class RoadRenderer {
   private config: RoadConfig

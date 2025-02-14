@@ -1,15 +1,6 @@
 import type { Position } from '../types'
 import type { Car } from '../Car'
-import { CircleShape, RectShape, type Shape } from '../shapes/Shape'
-
-export interface MapEntityConfig {
-  shape: Shape
-  draw?: (ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number) => void
-  onHit?: (car: Car) => void
-  onUpdate?: (deltaTime: number) => void
-  duration?: number // Duration of effect in milliseconds, if applicable
-  deactivateOnHit?: boolean // Whether the entity should be deactivated when hit
-}
+import { type Shape, isRect, isCircle } from '../shapes/Shape'
 
 export interface MapEntityEffect {
   type: string
@@ -18,58 +9,26 @@ export interface MapEntityEffect {
   startTime?: number
 }
 
-export class MapEntity {
-  public readonly shape: Shape
-  private draw?: (ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number) => void
-  private onHit?: (car: Car) => void
-  private onUpdate?: (deltaTime: number) => void
-  private duration?: number
-  private deactivateOnHit: boolean
-  private isActive: boolean = true
-  private effect?: MapEntityEffect
+export abstract class MapEntity {
+  protected shape: Shape
+  protected isActive: boolean = true
 
-  constructor(config: MapEntityConfig) {
-    this.shape = config.shape
-    this.draw = config.draw
-    this.onHit = config.onHit
-    this.onUpdate = config.onUpdate
-    this.duration = config.duration
-    this.deactivateOnHit = config.deactivateOnHit ?? false
+  constructor(shape: Shape) {
+    this.shape = shape
+  }
+
+  protected abstract draw(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number): void
+
+  public abstract onHit(car: Car): void
+
+  public update(deltaTime: number): void {
+    // Default implementation does nothing
+    // Subclasses can override if they need update behavior
   }
 
   public handleCollision(car: Car): void {
-    if (this.isActive && this.onHit) {
+    if (this.isActive) {
       this.onHit(car)
-      // Only deactivate if explicitly set to do so
-      if (this.deactivateOnHit) {
-        this.isActive = false
-      }
-    }
-  }
-
-  public update(deltaTime: number): void {
-    if (this.isActive && this.onUpdate) {
-      this.onUpdate(deltaTime)
-    }
-  }
-
-  public render(ctx: CanvasRenderingContext2D, x: number, y: number): void {
-    if (this.isActive && this.draw) {
-      // Calculate dimensions based on shape type
-      let width: number, height: number
-      if ('width' in this.shape && 'height' in this.shape) {
-        // Rectangle shape
-        const rectShape = this.shape as RectShape
-        width = rectShape.width
-        height = rectShape.height
-      } else {
-        // Circle shape
-        const circleShape = this.shape as CircleShape
-        width = circleShape.radius * 2
-        height = circleShape.radius * 2
-      }
-      // Use world coordinates directly
-      this.draw(ctx, x, y, width, height)
     }
   }
 
@@ -77,15 +36,28 @@ export class MapEntity {
     return this.isActive
   }
 
-  public getEffect(): MapEntityEffect | undefined {
-    return this.effect
-  }
-
-  public setEffect(effect: MapEntityEffect): void {
-    this.effect = effect
-  }
-
   public getShape(): Shape {
     return this.shape
+  }
+
+  protected deactivate(): void {
+    this.isActive = false
+  }
+
+  protected getDimensions(): { width: number, height: number } {
+    if (isRect(this.shape)) {
+      return { width: this.shape.width, height: this.shape.height }
+    } else if (isCircle(this.shape)) {
+      return { width: this.shape.radius * 2, height: this.shape.radius * 2 }
+    }
+    throw new Error('Unknown shape type')
+  }
+
+  public render(ctx: CanvasRenderingContext2D): void {
+    if (!this.isActive) return
+
+    const pos = this.shape.getPosition()
+    const { width, height } = this.getDimensions()
+    this.draw(ctx, pos.x, pos.y, width, height)
   }
 }

@@ -1,6 +1,6 @@
 import { VisualEffects } from './VisualEffects'
 import type { MapEntityEffect } from './entities/MapEntity'
-import { RectShape } from './shapes/Shape'
+import { RectShapeImpl } from './shapes/Shape'
 import type { Position, Controls } from './types'
 import { CarDrawer } from './CarDrawer'
 import { WheelTraces } from './WheelTraces'
@@ -51,7 +51,7 @@ export class Car {
   private activeEffects: MapEntityEffect[] = []
 
   private crashed: boolean = false
-  private shape: RectShape
+  private shape: RectShapeImpl
   private onScoreUpdate?: (points: number) => void
 
   constructor(screenWidth: number, screenHeight: number, private stats: CarStats, onScoreUpdate?: (points: number) => void) {
@@ -69,7 +69,7 @@ export class Car {
     this.height = this.baseHeight
 
     // Reset shape with initial dimensions
-    this.shape = new RectShape(this.worldPosition.x, this.worldPosition.y, this.width, this.height)
+    this.shape = new RectShapeImpl(this.worldPosition.x, this.worldPosition.y, this.width, this.height)
     this.onScoreUpdate = onScoreUpdate
 
     // Reset all physics values
@@ -293,7 +293,7 @@ export class Car {
     ]
 
     // Create a new shape with the actual rotated rectangle
-    this.shape = new RectShape(
+    this.shape = new RectShapeImpl(
       this.worldPosition.x,
       this.worldPosition.y,
       this.width,
@@ -415,7 +415,7 @@ export class Car {
     return this.crashed
   }
 
-  public getShape(): RectShape {
+  public getShape(): RectShapeImpl {
     return this.shape
   }
 }
