@@ -19,7 +19,7 @@ export class MapEntityManager {
 
   private generateInitialEntities(): void {
     for (let i = 0; i < 3; i++) {
-      this.generateRandomEntity(this.config.initialObstacleY - i * this.config.obstacleSpacing)
+    //   this.generateRandomEntity(this.config.initialObstacleY - i * this.config.obstacleSpacing)
     }
   }
 
@@ -34,7 +34,7 @@ export class MapEntityManager {
 
     // Keep generating entities ahead of the car
     while (this.nextEntityY > visibleTop) {
-      this.generateRandomEntity(this.nextEntityY)
+    //   this.generateRandomEntity(this.nextEntityY)
       this.nextEntityY -= this.config.obstacleSpacing
     }
 
