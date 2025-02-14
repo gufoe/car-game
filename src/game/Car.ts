@@ -29,32 +29,21 @@ export class Car {
   // Physics constants
   private readonly maxSpeed: number
   private readonly maxReverseSpeed: number
-  private readonly deceleration = 0.1
   private readonly steeringSpeed = Math.PI / 32
   private readonly maxSteeringAngle = Math.PI / 4
-  private readonly turnResponse = 2.0      // How quickly the car responds to steering
   private readonly gripFactor = 0.95       // How much grip the car has (0-1)
   private readonly driftFactor = 0.7       // How much the car drifts (0-1)
   private readonly weightTransfer = 0.02   // Effect of weight transfer during turns
-  private readonly tireFriction = 0.9      // Increased base friction
-  private readonly corneringStiffness = 0.8  // Increased for better grip
-  private readonly reverseSteerFactor = 1.2
-  private readonly inertiaFactor = 0.95    // Slightly reduced for better control
-  private readonly lateralDampening = 0.92 // New: controls how quickly lateral forces diminish
 
   // Dynamic state variables
-  private weightDistribution = 0.5
-  private slipAngle = 0
-
   private readonly drawer: CarDrawer
-
   private activeEffects: MapEntityEffect[] = []
 
   private crashed: boolean = false
   private shape: RectShapeImpl
   private onScoreUpdate?: (points: number) => void
 
-  constructor(screenWidth: number, screenHeight: number, private stats: CarStats, onScoreUpdate?: (points: number) => void) {
+  constructor(private stats: CarStats, onScoreUpdate?: (points: number) => void) {
     // Start at the bottom center of the screen in world coordinates
     this.worldPosition = {
       x: 0,
@@ -233,9 +222,6 @@ export class Car {
     const normalizedDelta = deltaTime / 16 // Normalize to 60fps
     const isReversing = this.velocity < 0
     const speedFactor = Math.min(Math.abs(this.velocity) / (isReversing ? this.maxReverseSpeed : this.maxSpeed), 1)
-
-    // Calculate effective steering angle
-    const effectiveSteeringAngle = this.steeringAngle * (isReversing ? -this.reverseSteerFactor : 1)
 
     // Calculate turn radius based on steering angle and wheelbase
     // Ackermann steering geometry (simplified)

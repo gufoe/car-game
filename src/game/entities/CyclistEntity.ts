@@ -1,5 +1,4 @@
 import type { Car } from '../Car'
-import type { Position } from '../types'
 import { CircleShapeImpl } from '../shapes/Shape'
 import { MapEntity, type MapEntityEffect } from './MapEntity'
 

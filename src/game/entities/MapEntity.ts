@@ -15,7 +15,10 @@ export abstract class MapEntity {
   protected abstract draw(ctx: CanvasRenderingContext2D): void
   public abstract onHit(car: Car): void
 
+
+
   public update(deltaTime: number): void {
+    deltaTime
     // Default implementation does nothing
     // Subclasses can override if they need update behavior
   }

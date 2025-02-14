@@ -4,7 +4,6 @@ import type { MapEntity } from './entities/MapEntity'
 export class RoadRenderer {
   private config: RoadConfig
   private lightGradient: CanvasGradient | null = null
-  private lastSpeed = 0
   private readonly VISIBLE_DISTANCE = 2000  // How far ahead/behind to render
   private readonly CHUNK_SIZE = 4000  // Total size of the visible road chunk
 
@@ -16,17 +15,15 @@ export class RoadRenderer {
     this.config = { ...this.config, width, height }
   }
 
-  public draw(ctx: CanvasRenderingContext2D, carWorldPos: Position, entities: MapEntity[], speed: number = 0): void {
-    this.drawBackground(ctx, speed)
+  public draw(ctx: CanvasRenderingContext2D, carWorldPos: Position, entities: MapEntity[]): void {
+    this.drawBackground(ctx)
     this.drawRoad(ctx, carWorldPos)
     this.drawRoadLines(ctx, carWorldPos)
     this.drawEntities(ctx, entities)
 
-    // Update last speed for smooth transitions
-    this.lastSpeed = speed
   }
 
-  private drawBackground(ctx: CanvasRenderingContext2D, speed: number): void {
+  private drawBackground(ctx: CanvasRenderingContext2D): void {
     // Create gradient if not exists
     if (!this.lightGradient) {
       this.lightGradient = ctx.createLinearGradient(0, -ctx.canvas.height, 0, ctx.canvas.height)
@@ -87,8 +84,6 @@ export class RoadRenderer {
 
   private drawEntities(ctx: CanvasRenderingContext2D, entities: MapEntity[]): void {
     entities.forEach(entity => {
-      const shape = entity.getShape()
-      const pos = shape.getPosition()
       entity.render(ctx)
     })
   }

@@ -34,10 +34,10 @@ export class Road {
     this.entityManager.update(this.lastCarY, deltaTime)
   }
 
-  public draw(ctx: CanvasRenderingContext2D, carWorldPos: Position, speed: number = 0, isDebugMode: boolean = false): void {
+  public draw(ctx: CanvasRenderingContext2D, carWorldPos: Position, isDebugMode: boolean = false): void {
     this.lastCarY = carWorldPos.y
     if (!isDebugMode) {
-      this.renderer.draw(ctx, carWorldPos, this.entityManager.getEntities(), speed)
+      this.renderer.draw(ctx, carWorldPos, this.entityManager.getEntities())
     } else {
       // In debug mode, only draw the collision shapes
       this.entityManager.getEntities().forEach(entity => {
