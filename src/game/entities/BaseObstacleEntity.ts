@@ -3,9 +3,19 @@ import { RectShapeImpl } from '../shapes/Shape'
 import { MapEntity } from './MapEntity'
 
 export abstract class BaseObstacleEntity extends MapEntity {
+  private readonly shape: RectShapeImpl
+  private readonly width: number
+  private readonly height: number
+
   constructor(x: number, y: number, width: number, height: number) {
-    const shape = new RectShapeImpl(x, y, width, height)
-    super(shape.getShapeData())
+    super()
+    this.width = width
+    this.height = height
+    this.shape = new RectShapeImpl(x, y, width, height)
+  }
+
+  public getShape(): RectShapeImpl {
+    return this.shape
   }
 
   protected static drawWarningStripes(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number): void {
@@ -31,13 +41,15 @@ export abstract class BaseObstacleEntity extends MapEntity {
     ctx.restore()
   }
 
-  protected draw(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number): void {
+  protected draw(ctx: CanvasRenderingContext2D): void {
+    const pos = this.shape.getPosition()
+
     // Draw base obstacle
     ctx.fillStyle = '#4a4a4a'
-    ctx.fillRect(x - width/2, y - height/2, width, height)
+    ctx.fillRect(pos.x - this.width/2, pos.y - this.height/2, this.width, this.height)
 
     // Add warning stripes
-    BaseObstacleEntity.drawWarningStripes(ctx, x, y, width, height)
+    BaseObstacleEntity.drawWarningStripes(ctx, pos.x, pos.y, this.width, this.height)
   }
 
   public onHit(car: Car): void {

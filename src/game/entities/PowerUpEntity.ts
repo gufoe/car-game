@@ -5,23 +5,31 @@ import { MapEntity, type MapEntityEffect } from './MapEntity'
 export class PowerUpEntity extends MapEntity {
   private static readonly RADIUS = 20
   private static readonly DURATION = 5000 // 5 seconds
+  private readonly shape: CircleShapeImpl
 
   constructor(x: number, y: number) {
-    const shape = new CircleShapeImpl(x, y, PowerUpEntity.RADIUS)
-    super(shape.getShapeData())
+    super()
+    this.shape = new CircleShapeImpl(x, y, PowerUpEntity.RADIUS)
+  }
+
+  public getShape(): CircleShapeImpl {
+    return this.shape
   }
 
   public static create(x: number, y: number): PowerUpEntity {
     return new PowerUpEntity(x, y)
   }
 
-  protected draw(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number): void {
+  protected draw(ctx: CanvasRenderingContext2D): void {
+    const pos = this.shape.getPosition()
+    const radius = PowerUpEntity.RADIUS
+
     // Draw speed boost power-up
     ctx.fillStyle = '#00ff00'
     ctx.beginPath()
-    ctx.moveTo(x, y - height/2)  // Top center
-    ctx.lineTo(x + width/2, y + height/2)  // Bottom right
-    ctx.lineTo(x - width/2, y + height/2)  // Bottom left
+    ctx.moveTo(pos.x, pos.y - radius)  // Top center
+    ctx.lineTo(pos.x + radius, pos.y + radius)  // Bottom right
+    ctx.lineTo(pos.x - radius, pos.y + radius)  // Bottom left
     ctx.closePath()
     ctx.fill()
 

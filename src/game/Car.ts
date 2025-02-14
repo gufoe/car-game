@@ -267,39 +267,13 @@ export class Car {
     this.worldPosition.x += Math.sin(this.rotation) * this.velocity + Math.cos(this.rotation) * this.lateralVelocity
     this.worldPosition.y -= Math.cos(this.rotation) * this.velocity - Math.sin(this.rotation) * this.lateralVelocity
 
-    // Calculate corners of the rotated rectangle
-    const halfWidth = this.width / 2
-    const halfHeight = this.height / 2
-    const cos = Math.cos(this.rotation)
-    const sin = Math.sin(this.rotation)
-
-    const corners = [
-      { // Top left (front left since car points up)
-        x: this.worldPosition.x - halfWidth * cos + halfHeight * sin,
-        y: this.worldPosition.y - halfWidth * sin - halfHeight * cos
-      },
-      { // Top right (front right)
-        x: this.worldPosition.x + halfWidth * cos + halfHeight * sin,
-        y: this.worldPosition.y + halfWidth * sin - halfHeight * cos
-      },
-      { // Bottom right (rear right)
-        x: this.worldPosition.x + halfWidth * cos - halfHeight * sin,
-        y: this.worldPosition.y + halfWidth * sin + halfHeight * cos
-      },
-      { // Bottom left (rear left)
-        x: this.worldPosition.x - halfWidth * cos - halfHeight * sin,
-        y: this.worldPosition.y - halfWidth * sin + halfHeight * cos
-      }
-    ]
-
     // Create a new shape with the actual rotated rectangle
     this.shape = new RectShapeImpl(
       this.worldPosition.x,
       this.worldPosition.y,
       this.width,
       this.height,
-      this.rotation,
-      corners
+      this.rotation
     )
   }
 

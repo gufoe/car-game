@@ -22,21 +22,27 @@ export class CyclistEntity extends MapEntity {
   private currentX: number
   private bloodEffects: BloodEffect[] = []
   private isHit: boolean = false
+  private readonly shape: CircleShapeImpl
 
   constructor(x: number, y: number, minX: number, maxX: number) {
-    const shape = new CircleShapeImpl(x, y, CyclistEntity.CYCLIST_SIZE / 2)
-    super(shape.getShapeData())
+    super()
+    this.shape = new CircleShapeImpl(x, y, CyclistEntity.CYCLIST_SIZE / 2)
     this.minX = minX
     this.maxX = maxX
     this.moveDirection = Math.random() > 0.5 ? 1 : -1
     this.currentX = x
   }
 
+  public getShape(): CircleShapeImpl {
+    return this.shape
+  }
+
   public static create(x: number, y: number, minX: number, maxX: number): CyclistEntity {
     return new CyclistEntity(x, y, minX, maxX)
   }
 
-  protected draw(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number): void {
+  protected draw(ctx: CanvasRenderingContext2D): void {
+    const pos = this.shape.getPosition()
     const size = CyclistEntity.CYCLIST_SIZE
     ctx.save()
 
@@ -64,35 +70,35 @@ export class CyclistEntity extends MapEntity {
 
       // Wheels
       ctx.beginPath()
-      ctx.arc(x - size/4, y + size/4, size/4, 0, Math.PI * 2)
+      ctx.arc(pos.x - size/4, pos.y + size/4, size/4, 0, Math.PI * 2)
       ctx.stroke()
       ctx.beginPath()
-      ctx.arc(x + size/4, y + size/4, size/4, 0, Math.PI * 2)
+      ctx.arc(pos.x + size/4, pos.y + size/4, size/4, 0, Math.PI * 2)
       ctx.stroke()
 
       // Frame
       ctx.beginPath()
-      ctx.moveTo(x - size/4, y + size/4)
-      ctx.lineTo(x, y - size/4)
-      ctx.lineTo(x + size/4, y + size/4)
+      ctx.moveTo(pos.x - size/4, pos.y + size/4)
+      ctx.lineTo(pos.x, pos.y - size/4)
+      ctx.lineTo(pos.x + size/4, pos.y + size/4)
       ctx.stroke()
 
       // Handlebars
       ctx.beginPath()
-      ctx.moveTo(x - size/6, y - size/6)
-      ctx.lineTo(x + size/6, y - size/6)
+      ctx.moveTo(pos.x - size/6, pos.y - size/6)
+      ctx.lineTo(pos.x + size/6, pos.y - size/6)
       ctx.stroke()
 
       // Person
       ctx.fillStyle = '#FF6B6B'
       ctx.beginPath()
-      ctx.arc(x, y - size/3, size/6, 0, Math.PI * 2) // Head
+      ctx.arc(pos.x, pos.y - size/3, size/6, 0, Math.PI * 2) // Head
       ctx.fill()
 
       // Debug: always show collision circle
       ctx.strokeStyle = 'rgba(255, 0, 0, 0.2)'
       ctx.beginPath()
-      ctx.arc(x, y, size/2, 0, Math.PI * 2)
+      ctx.arc(pos.x, pos.y, size/2, 0, Math.PI * 2)
       ctx.stroke()
     }
 

@@ -89,7 +89,7 @@ export class RoadRenderer {
     entities.forEach(entity => {
       const shape = entity.getShape()
       const pos = shape.getPosition()
-      entity.render(ctx, pos.x, pos.y)
+      entity.render(ctx)
     })
   }
 

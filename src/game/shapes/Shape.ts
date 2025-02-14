@@ -5,55 +5,37 @@ export interface ShapeBase {
   type: string
   getPosition(): Position
   setPosition(x: number, y: number): void
-  collidesWith(other: Shape): boolean
+  collidesWith(other: ShapeImpl): boolean
   debugDraw(ctx: CanvasRenderingContext2D): void
 }
 
-export interface RectShapeData extends ShapeBase {
-  type: 'rect'
-  width: number
-  height: number
-  rotation?: number
+export function isRect(shape: ShapeImpl): shape is RectShapeImpl {
+  return shape instanceof RectShapeImpl
 }
 
-export interface CircleShapeData extends ShapeBase {
-  type: 'circle'
-  radius: number
-}
-
-export type Shape = RectShapeData | CircleShapeData
-
-export function isRect(shape: Shape): shape is RectShapeData {
-  return shape.type === 'rect'
-}
-
-export function isCircle(shape: Shape): shape is CircleShapeData {
-  return shape.type === 'circle'
+export function isCircle(shape: ShapeImpl): shape is CircleShapeImpl {
+  return shape instanceof CircleShapeImpl
 }
 
 // Shape implementations
 export abstract class ShapeImpl {
-  protected x: number
-  protected y: number
-
-  constructor(x: number, y: number) {
-    this.x = x
-    this.y = y
-  }
+  constructor(
+    public readonly x: number,
+    public readonly y: number
+  ) {}
 
   abstract collidesWith(other: ShapeImpl): boolean
   abstract collidesWithRect(rect: RectShapeImpl): boolean
   abstract collidesWithCircle(circle: CircleShapeImpl): boolean
   abstract debugDraw(ctx: CanvasRenderingContext2D): void
-  abstract getShapeData(): Shape
 
   getPosition(): Position {
     return { x: this.x, y: this.y }
   }
 
   setPosition(x: number, y: number): void {
-    this.x = x
-    this.y = y
+    (this as any).x = x;
+    (this as any).y = y;
   }
 }
 
@@ -63,44 +45,46 @@ export class RectShapeImpl extends ShapeImpl {
   constructor(
     x: number,
     y: number,
-    private readonly width: number,
-    private readonly height: number,
-    private readonly rotation: number = 0,
-    corners?: Position[]
+    readonly width: number,
+    readonly height: number,
+    readonly rotation: number = 0
   ) {
     super(x, y)
-    if (corners) {
-      this.corners = corners
-    } else {
-      this.calculateCorners()
-    }
+    this.calculateCorners()
   }
 
   private calculateCorners(): void {
     const halfWidth = this.width / 2
     const halfHeight = this.height / 2
-    this.corners = [
-      { x: this.x - halfWidth, y: this.y - halfHeight },
-      { x: this.x + halfWidth, y: this.y - halfHeight },
-      { x: this.x + halfWidth, y: this.y + halfHeight },
-      { x: this.x - halfWidth, y: this.y + halfHeight }
+    const cos = Math.cos(this.rotation)
+    const sin = Math.sin(this.rotation)
+
+    // Calculate corners in local space first
+    const localCorners = [
+      { x: -halfWidth, y: -halfHeight },
+      { x: halfWidth, y: -halfHeight },
+      { x: halfWidth, y: halfHeight },
+      { x: -halfWidth, y: halfHeight }
     ]
+
+    // Transform corners to world space
+    this.corners = localCorners.map(corner => ({
+      x: this.x + (corner.x * cos - corner.y * sin),
+      y: this.y + (corner.x * sin + corner.y * cos)
+    }))
   }
 
-  getShapeData(): RectShapeData {
-    return {
-      type: 'rect',
-      width: this.width,
-      height: this.height,
-      rotation: this.rotation,
-      getPosition: () => this.getPosition(),
-      setPosition: (x, y) => this.setPosition(x, y),
-      collidesWith: (other) => this.collidesWith(other as any),
-      debugDraw: (ctx) => this.debugDraw(ctx)
-    }
+  setPosition(x: number, y: number): void {
+    super.setPosition(x, y)
+    this.calculateCorners()
   }
 
-  collidesWith(other: Shape): boolean {
+  setRotation(rotation: number): void {
+    (this as any).rotation = rotation
+    this.calculateCorners()
+  }
+
+  collidesWith(other: ShapeImpl): boolean {
     if (other instanceof RectShapeImpl) {
       return this.collidesWithRect(other)
     } else if (other instanceof CircleShapeImpl) {
@@ -175,18 +159,17 @@ export class RectShapeImpl extends ShapeImpl {
     // Find the closest point on the oriented rectangle to the circle's center
     const corners = this.corners
     let closestDist = Number.POSITIVE_INFINITY
-    let closestPoint = { x: 0, y: 0 }
 
     // Check each edge of the rectangle
     for (let i = 0; i < corners.length; i++) {
       const p1 = corners[i]
       const p2 = corners[(i + 1) % corners.length]
-      const closest = this.closestPointOnLine(p1, p2, { x: circle.x, y: circle.y })
-      const dist = (closest.x - circle.x) ** 2 + (closest.y - circle.y) ** 2
+      const closest = this.closestPointOnLine(p1, p2, circle.getPosition())
+      const circlePos = circle.getPosition()
+      const dist = (closest.x - circlePos.x) ** 2 + (closest.y - circlePos.y) ** 2
 
       if (dist < closestDist) {
         closestDist = dist
-        closestPoint = closest
       }
     }
 
@@ -214,10 +197,11 @@ export class RectShapeImpl extends ShapeImpl {
   }
 
   debugDraw(ctx: CanvasRenderingContext2D): void {
+    ctx.save()
     ctx.strokeStyle = '#ff0000'
     ctx.lineWidth = 2
 
-    // Draw the oriented rectangle
+    // Draw the oriented rectangle using corners
     ctx.beginPath()
     const corners = this.corners
     ctx.moveTo(corners[0].x, corners[0].y)
@@ -232,6 +216,18 @@ export class RectShapeImpl extends ShapeImpl {
     ctx.beginPath()
     ctx.arc(this.x, this.y, 2, 0, Math.PI * 2)
     ctx.fill()
+
+    // Draw rotation indicator
+    const rotationLength = Math.min(this.width, this.height) / 4
+    ctx.beginPath()
+    ctx.moveTo(this.x, this.y)
+    ctx.lineTo(
+      this.x + Math.sin(this.rotation) * rotationLength,
+      this.y - Math.cos(this.rotation) * rotationLength
+    )
+    ctx.stroke()
+
+    ctx.restore()
   }
 }
 
@@ -239,23 +235,12 @@ export class CircleShapeImpl extends ShapeImpl {
   constructor(
     x: number,
     y: number,
-    private readonly radius: number
+    readonly radius: number
   ) {
     super(x, y)
   }
 
-  getShapeData(): CircleShapeData {
-    return {
-      type: 'circle',
-      radius: this.radius,
-      getPosition: () => this.getPosition(),
-      setPosition: (x, y) => this.setPosition(x, y),
-      collidesWith: (other) => this.collidesWith(other as any),
-      debugDraw: (ctx) => this.debugDraw(ctx)
-    }
-  }
-
-  collidesWith(other: Shape): boolean {
+  collidesWith(other: ShapeImpl): boolean {
     if (other instanceof RectShapeImpl) {
       return this.collidesWithRect(other)
     } else if (other instanceof CircleShapeImpl) {
@@ -282,7 +267,7 @@ export class CircleShapeImpl extends ShapeImpl {
     ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2)
     ctx.stroke()
 
-    // Draw a dot at the center
+    // Draw center point
     ctx.fillStyle = '#ff0000'
     ctx.beginPath()
     ctx.arc(this.x, this.y, 2, 0, Math.PI * 2)

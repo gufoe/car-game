@@ -1,6 +1,5 @@
-import type { Position } from '../types'
 import type { Car } from '../Car'
-import { type Shape, isRect, isCircle } from '../shapes/Shape'
+import type { ShapeImpl } from '../shapes/Shape'
 
 export interface MapEntityEffect {
   type: string
@@ -10,15 +9,10 @@ export interface MapEntityEffect {
 }
 
 export abstract class MapEntity {
-  protected shape: Shape
   protected isActive: boolean = true
 
-  constructor(shape: Shape) {
-    this.shape = shape
-  }
-
-  protected abstract draw(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number): void
-
+  public abstract getShape(): ShapeImpl
+  protected abstract draw(ctx: CanvasRenderingContext2D): void
   public abstract onHit(car: Car): void
 
   public update(deltaTime: number): void {
@@ -36,28 +30,12 @@ export abstract class MapEntity {
     return this.isActive
   }
 
-  public getShape(): Shape {
-    return this.shape
-  }
-
   protected deactivate(): void {
     this.isActive = false
   }
 
-  protected getDimensions(): { width: number, height: number } {
-    if (isRect(this.shape)) {
-      return { width: this.shape.width, height: this.shape.height }
-    } else if (isCircle(this.shape)) {
-      return { width: this.shape.radius * 2, height: this.shape.radius * 2 }
-    }
-    throw new Error('Unknown shape type')
-  }
-
   public render(ctx: CanvasRenderingContext2D): void {
     if (!this.isActive) return
-
-    const pos = this.shape.getPosition()
-    const { width, height } = this.getDimensions()
-    this.draw(ctx, pos.x, pos.y, width, height)
+    this.draw(ctx)
   }
 }

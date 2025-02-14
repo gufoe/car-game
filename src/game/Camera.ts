@@ -15,7 +15,7 @@ export class Camera {
     this.targetPosition = { ...this.screenCenter }
   }
 
-  update(targetWorldPos: Position, velocity: number): void {
+  update(targetWorldPos: Position): void {
     // Simply follow the car's Y position like in the original code
     this.targetPosition = {
       x: this.screenCenter.x,
