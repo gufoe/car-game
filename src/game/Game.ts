@@ -26,8 +26,8 @@ export class Game {
 
     // Define constant car stats
     private readonly defaultCarStats: CarStats = {
-        maxSpeed: 100,
-        acceleration: 1,
+        maxSpeed: 10,
+        acceleration: .3,
         handling: 0.8
     }
 

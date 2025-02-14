@@ -95,10 +95,10 @@ export class CyclistEntity extends MapEntity {
       ctx.fill()
 
       // Debug: always show collision circle
-      ctx.strokeStyle = 'rgba(255, 0, 0, 0.2)'
-      ctx.beginPath()
-      ctx.arc(pos.x, pos.y, size/2, 0, Math.PI * 2)
-      ctx.stroke()
+    //   ctx.strokeStyle = 'rgba(255, 0, 0, 0.2)'
+    //   ctx.beginPath()
+    //   ctx.arc(pos.x, pos.y, size/2, 0, Math.PI * 2)
+    //   ctx.stroke()
     }
 
     ctx.restore()

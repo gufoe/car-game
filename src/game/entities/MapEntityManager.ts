@@ -19,7 +19,7 @@ export class MapEntityManager {
 
   private generateInitialEntities(): void {
     for (let i = 0; i < 3; i++) {
-    //   this.generateRandomEntity(this.config.initialObstacleY - i * this.config.obstacleSpacing)
+      this.generateRandomEntity(this.config.initialObstacleY - i * this.config.obstacleSpacing)
     }
   }
 
@@ -34,7 +34,7 @@ export class MapEntityManager {
 
     // Keep generating entities ahead of the car
     while (this.nextEntityY > visibleTop) {
-    //   this.generateRandomEntity(this.nextEntityY)
+      this.generateRandomEntity(this.nextEntityY)
       this.nextEntityY -= this.config.obstacleSpacing
     }
 
@@ -54,7 +54,7 @@ export class MapEntityManager {
 
     // As the game progresses, increase the chance of power-ups and cyclists
     const powerUpChance = Math.max(0.1, Math.min(0.3, progress / 20000)) // Max 30% chance for power-ups
-    const cyclistChance = Math.max(0.15, Math.min(0.4, progress / 15000)) // Max 40% chance for cyclists
+    const cyclistChance = Math.max(0.6, Math.min(0.6, progress / 15000)) // Max 40% chance for cyclists
 
     if (Math.random() < powerUpChance) {
       this.generatePowerUp(y)
