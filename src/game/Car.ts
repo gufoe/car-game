@@ -14,6 +14,7 @@ export interface CarStats {
 
 export class Car {
   private worldPosition: Position   // Position in world coordinates
+  private rearAxlePos: Position     // Position of the rear axle
   private readonly baseWidth = 50
   private readonly baseHeight = 90
   private width = this.baseWidth
@@ -46,10 +47,13 @@ export class Car {
 
   constructor(private stats: CarStats, onScoreUpdate?: (points: number) => void) {
     // Start at the bottom center of the screen in world coordinates
-    this.worldPosition = {
-      x: 0,
-      y: 0
-    }
+    this.worldPosition = { x: 0, y: 0 };
+    // Initialize rearAxlePos based on the car's orientation and wheelbase
+    const centerToAxle = this.wheelbase / 2; // distance from center to rear axle
+    this.rearAxlePos = {
+      x: this.worldPosition.x - Math.sin(this.rotation) * centerToAxle,
+      y: this.worldPosition.y + Math.cos(this.rotation) * centerToAxle
+    };
     this.drawer = new CarDrawer()
     this.traces = new WheelTraces()
     this.effects = new VisualEffects()
@@ -104,7 +108,7 @@ export class Car {
     this.updateSteering(controls)
     this.updateVelocity(controls, deltaTime)
     this.updatePhysics(deltaTime)
-    this.updatePosition()
+    this.updatePosition(deltaTime)
 
     // Add trace points for each wheel
     const speed = Math.abs(this.velocity)
@@ -196,88 +200,50 @@ export class Car {
   }
 
   private updatePhysics(deltaTime: number): void {
-    if (Math.abs(this.velocity) < 0.1) return
+    if (Math.abs(this.velocity) < 0.1) return;
+    const dt = deltaTime / 1000;
 
-
-    // Improved steering physics
-    const turnRadius = this.wheelbase / Math.sin(Math.abs(this.steeringAngle) + 0.001)
-
-    // Realistic grip calculation
-
-    // STEP 1: For demonstration, let's say we compute driveForce for rear wheels
-    // based on user's throttle. If controls.up, produce some positive force; if down, negative:
-    let driveForce = 0
-    // For example:
-    // driveForce = someAcceleration * massOfCar * (controls.up ? 1 : (controls.down ? -1 : 0))
-
-    // STEP 2: Update each wheel's forces
-    // Combine the car's velocity into {x, y}, and an angular velocity (currently not tracked in your code).
-    // For a simpler approach, we approximate angularVelocity from your rotation changes:
-    const carAngularVel = this.angularVelocity
-    const dt = deltaTime / 1000 // convert ms to seconds if you track it that way
-
+    // Update wheels: front wheels steer and rear wheels provide drive traction (drive force already handled in updateVelocity).
     this.wheels.forEach(w => {
-      // If it's a front wheel, set w.steeringAngle = this.steeringAngle
-      // Rear wheels get no steeringAngle
+      const steering = w.isFrontWheel ? this.steeringAngle : 0;
       w.updateWheel(
         { x: Math.sin(this.rotation) * this.velocity, y: -Math.cos(this.rotation) * this.velocity },
-        carAngularVel,
+        this.angularVelocity,
         this.rotation,
-        w.isFrontWheel ? this.steeringAngle : 0,
+        steering,
         dt,
-        w.isFrontWheel ? 0 : driveForce // drive force only on rear wheels for RWD
-      )
-    })
+        w.isFrontWheel ? 0 : 0
+      );
+    });
 
-    // STEP 3: Sum up forces from wheels:
-    let totalTorque = 0
-    this.wheels.forEach(w => {
-      // If you store fx, fy in each wheel, sum them up here. We used an example getTorque():
-      totalTorque += w.getTorque()
-    })
-
-    // Use PD control to drive the angular velocity towards the desired turn rate
-    const turnMultiplier = 20; // increased multiplier to amplify desired turn rate
-    const desiredAngularVelocity = (Math.abs(this.steeringAngle) > 0.01) ? (this.velocity / turnRadius) * Math.sign(this.steeringAngle) * turnMultiplier : 0;
-    const gain = 20; // increased gain factor for responsiveness
-    this.angularVelocity += (desiredAngularVelocity - this.angularVelocity) * gain * dt;
-
-    // Update rotation from angular velocity
-    this.rotation += this.angularVelocity * dt;
-
-    // STEP 4: Integrate motion for the car body.
-    // For instance:
-    // carAx = totalFx / carMass
-    // carAy = totalFy / carMass
-    // this.velocity.x += carAx * dt  (but your code currently uses a scalar 'velocity')
-    // ...
-    // rotation += (totalTorque / carInertia) * dt
-
-    // ) Keep or remove parts of your old drift code as you see fit. The wheel-based approach
-    //   typically replaces that logic, because each wheel is generating real lateral forces.
+    // Removed the bicycle model integration from here; updatePosition now handles the state update including rotation.
   }
 
-  private updatePosition(): void {
-    // Improved position update with more accurate drift
-    const forwardX = Math.sin(this.rotation) * this.velocity
-    const forwardY = -Math.cos(this.rotation) * this.velocity
+  private updatePosition(deltaTime: number): void {
+    const dt = deltaTime / 1000;
+    const L = this.wheelbase;
+    const Lr = L / 2; // distance from center to rear axle
 
-    // Only apply significant lateral movement when actually drifting
-    const lateralMultiplier = (Math.abs(this.steeringAngle) > 0.01 && Math.abs(this.velocity) > 1) ? 1 : 0.1
-    const lateralX = Math.cos(this.rotation) * this.lateralVelocity * lateralMultiplier
-    const lateralY = Math.sin(this.rotation) * this.lateralVelocity * lateralMultiplier
+    // Compute slip angle beta
+    const beta = Math.atan((Lr / L) * Math.tan(this.steeringAngle));
 
-    this.worldPosition.x += forwardX + lateralX
-    this.worldPosition.y += forwardY + lateralY
+    // Update car center using the direction (rotation + beta).
+    // Note: our coordinate system uses (sin, -cos) for a zero rotation (pointing up).
+    this.worldPosition.x += this.velocity * dt * Math.sin(this.rotation + beta);
+    this.worldPosition.y += -this.velocity * dt * Math.cos(this.rotation + beta);
 
-    // Update collision shape
-    this.shape = new RectShapeImpl(
-        this.worldPosition.x,
-        this.worldPosition.y,
-        this.width,
-        this.height,
-        this.rotation
-    )
+    // Update orientation using the bicycle kinematic model
+    const dtheta = (this.velocity / L) * Math.cos(beta) * Math.tan(this.steeringAngle) * dt;
+    this.rotation += dtheta;
+    this.angularVelocity = dtheta / dt;
+
+    // Update rear axle position based on new center and orientation (rear axle is behind center by L/2)
+    const centerToAxle = Lr;
+    this.rearAxlePos.x = this.worldPosition.x - centerToAxle * Math.sin(this.rotation);
+    this.rearAxlePos.y = this.worldPosition.y + centerToAxle * Math.cos(this.rotation);
+
+    // Update collision shape with the new car center and orientation
+    this.shape = new RectShapeImpl(this.worldPosition.x, this.worldPosition.y, this.width, this.height, this.rotation);
   }
 
   public draw(ctx: CanvasRenderingContext2D): void {
@@ -353,7 +319,7 @@ export class Car {
       // Increase height (length) of the car
       this.height = this.baseHeight + effect.value
       // Update shape with new dimensions
-      this.updatePosition()
+      this.updatePosition(0)
     }
   }
 
