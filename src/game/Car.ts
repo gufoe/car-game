@@ -220,20 +220,34 @@ export class Car {
   }
 
   private updatePosition(deltaTime: number): void {
-    const dt = deltaTime / 1000;
+    const dt = deltaTime / 50;
     const L = this.wheelbase;
     const Lr = L / 2; // distance from center to rear axle
 
-    // Compute slip angle beta
-    const beta = Math.atan((Lr / L) * Math.tan(this.steeringAngle));
+    // Calculate raw lateral acceleration requirement
+    const rawTan = Math.tan(this.steeringAngle);
+    const a_raw = Math.abs(this.velocity * this.velocity * rawTan / L);
 
-    // Update car center using the direction (rotation + beta).
-    // Note: our coordinate system uses (sin, -cos) for a zero rotation (pointing up).
+    // Define a dynamic friction constant that depends on speed
+    const baseG = 1000;  // high grip value at low speed
+    const minG = 600;    // low grip value at high speed
+    const speedFactor = Math.min(Math.abs(this.velocity) / this.stats.maxSpeed, 1);
+    const effectiveG = baseG - (baseG - minG) * speedFactor;
+    const gripLimit = this.stats.handling * effectiveG;
+
+    // Scale down tan(steeringAngle) if required lateral acceleration exceeds grip
+    const scale = a_raw > gripLimit ? gripLimit / a_raw : 1;
+    const effectiveTan = rawTan * scale;
+
+    // Compute effective slip angle beta based on adjusted steering
+    const beta = Math.atan((Lr / L) * effectiveTan);
+
+    // Update car center using the effective bicycle model
     this.worldPosition.x += this.velocity * dt * Math.sin(this.rotation + beta);
-    this.worldPosition.y += -this.velocity * dt * Math.cos(this.rotation + beta);
+    this.worldPosition.y += this.velocity * dt * -Math.cos(this.rotation + beta);
 
-    // Update orientation using the bicycle kinematic model
-    const dtheta = (this.velocity / L) * Math.cos(beta) * Math.tan(this.steeringAngle) * dt;
+    // Update orientation using the bicycle model with effective steering
+    const dtheta = (this.velocity / L) * Math.cos(beta) * effectiveTan * dt;
     this.rotation += dtheta;
     this.angularVelocity = dtheta / dt;
 
@@ -244,6 +258,14 @@ export class Car {
 
     // Update collision shape with the new car center and orientation
     this.shape = new RectShapeImpl(this.worldPosition.x, this.worldPosition.y, this.width, this.height, this.rotation);
+
+    // Apply turning deceleration: turning causes traction loss that slows the car down
+    const turnDeceleration = Math.abs(effectiveTan) * 2; // reduced tuning multiplier to avoid excessive slowdown
+    if (this.velocity > 0) {
+      this.velocity = Math.max(this.velocity - turnDeceleration * dt, 0);
+    } else if (this.velocity < 0) {
+      this.velocity = Math.min(this.velocity + turnDeceleration * dt, 0);
+    }
   }
 
   public draw(ctx: CanvasRenderingContext2D): void {
