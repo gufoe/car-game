@@ -4,6 +4,7 @@ import { RectShapeImpl } from './shapes/Shape'
 import type { Position, Controls } from './types'
 import { CarDrawer } from './CarDrawer'
 import { WheelTraces } from './WheelTraces'
+import { CarWheel } from './CarWheel'
 
 export interface CarStats {
   maxSpeed: number
@@ -26,14 +27,11 @@ export class Car {
   private readonly traces: WheelTraces
   private readonly effects: VisualEffects
 
-  // Physics constants
+  // Updated physics constants
   private readonly maxSpeed: number
-  private readonly maxReverseSpeed: number
   private readonly steeringSpeed = Math.PI / 32
   private readonly maxSteeringAngle = Math.PI / 4
-  private readonly gripFactor = 1       // How much grip the car has (0-1)
-  private readonly driftFactor = 0.5       // How much the car drifts (0-1)
-  private readonly weightTransfer = 0.3   // Effect of weight transfer during turns
+  private readonly airResistance = 0.99    // Air drag coefficient
 
   // Dynamic state variables
   private readonly drawer: CarDrawer
@@ -42,6 +40,9 @@ export class Car {
   private crashed: boolean = false
   private shape: RectShapeImpl
   private onScoreUpdate?: (points: number) => void
+
+  private wheels: CarWheel[] = []
+  private angularVelocity: number = 0;
 
   constructor(private stats: CarStats, onScoreUpdate?: (points: number) => void) {
     // Start at the bottom center of the screen in world coordinates
@@ -73,71 +74,21 @@ export class Car {
 
     // Initialize physics constants from stats
     this.maxSpeed = stats.maxSpeed
-    this.maxReverseSpeed = stats.maxSpeed * 0.5
-  }
 
-  private getWheelPositions(): { [key: string]: Position } {
+    // Example: define four wheels at local positions relative to car center
+    // (x=±trackWidth/2, y=±wheelbase/2).
     const halfTrack = this.trackWidth / 2
     const halfBase = this.wheelbase / 2
-
-    // Calculate wheel positions relative to car center, matching CarDrawer dimensions
-    const frontLeft = {
-      x: -halfTrack,
-      y: -halfBase
-    }
-    const frontRight = {
-      x: halfTrack,
-      y: -halfBase
-    }
-    const rearLeft = {
-      x: -halfTrack,
-      y: halfBase
-    }
-    const rearRight = {
-      x: halfTrack,
-      y: halfBase
-    }
-
-    // Rotate front wheels based on steering angle
-    if (this.steeringAngle !== 0) {
-      const cos = Math.cos(this.steeringAngle)
-      const sin = Math.sin(this.steeringAngle)
-
-      // Rotate front wheels around their own axis
-      const rotateWheel = (wheel: Position) => {
-        const x = wheel.x
-        const y = wheel.y
-        return {
-          x: x * cos - y * sin,
-          y: x * sin + y * cos
-        }
-      }
-
-      const rotatedFrontLeft = rotateWheel(frontLeft)
-      frontLeft.x = rotatedFrontLeft.x
-      frontLeft.y = rotatedFrontLeft.y
-
-      const rotatedFrontRight = rotateWheel(frontRight)
-      frontRight.x = rotatedFrontRight.x
-      frontRight.y = rotatedFrontRight.y
-    }
-
-    // Transform to car's local rotated space
-    const cos = Math.cos(this.rotation)
-    const sin = Math.sin(this.rotation)
-
-    const transformToLocal = (pos: Position): Position => ({
-      x: pos.x * cos - pos.y * sin,
-      y: pos.x * sin + pos.y * cos
-    })
-
-    return {
-      frontLeft: transformToLocal(frontLeft),
-      frontRight: transformToLocal(frontRight),
-      rearLeft: transformToLocal(rearLeft),
-      rearRight: transformToLocal(rearRight)
-    }
+    const wheelMass = 10     // Example, tune as needed
+    const wheelInertia = 1.0 // Example, tune as needed
+    this.wheels = [
+      new CarWheel({ x: -halfTrack, y: -halfBase }, true,  wheelMass, wheelInertia), // front-left
+      new CarWheel({ x:  halfTrack, y: -halfBase }, true,  wheelMass, wheelInertia), // front-right
+      new CarWheel({ x: -halfTrack, y:  halfBase }, false, wheelMass, wheelInertia), // rear-left
+      new CarWheel({ x:  halfTrack, y:  halfBase }, false, wheelMass, wheelInertia), // rear-right
+    ]
   }
+
 
   public update(controls: Controls, deltaTime: number = 16): void {
     if (this.crashed) return
@@ -156,10 +107,14 @@ export class Car {
     this.updatePosition()
 
     // Add trace points for each wheel
-    const wheelPositions = this.getWheelPositions()
     const speed = Math.abs(this.velocity)
     const drift = Math.abs(this.lateralVelocity)
-    const intensity = Math.min((speed + drift) / this.maxSpeed, 1)
+
+    // Calculate different intensities for front and rear wheels
+    const baseIntensity = Math.min((speed + drift) / this.maxSpeed, 1)
+    const accelerating = controls.up || controls.down
+    const rearWheelIntensity = baseIntensity * (accelerating ? 1.5 : 1.0) // More intense when accelerating
+    const frontWheelIntensity = baseIntensity * 0.7 // Less intense for front wheels
 
     if (speed > 0.1 || drift > 0.1) {
       // Get wheel positions in car's local space
@@ -180,7 +135,9 @@ export class Car {
         const rotatedX = pos.x * cos - pos.y * sin
         const rotatedY = pos.x * sin + pos.y * cos
 
-        // Store in world coordinates
+        // Store in world coordinates with wheel-specific intensity
+        const isRearWheel = wheel.startsWith('rear')
+        const intensity = isRearWheel ? rearWheelIntensity : frontWheelIntensity
         this.traces.addTracePoint(wheel, {
           x: this.worldPosition.x + rotatedX,
           y: this.worldPosition.y + rotatedY
@@ -216,67 +173,110 @@ export class Car {
 
   private updateVelocity(controls: Controls, deltaTime: number): void {
     const effectiveMaxSpeed = this.getEffectiveMaxSpeed()
-    const normalizedDelta = deltaTime / 16 // Normalize to 60fps
-    const baseAcceleration = this.stats.acceleration // Use base acceleration from stats
+    const normalizedDelta = deltaTime / 16
+    const baseAcceleration = this.stats.acceleration
 
+    // Apply acceleration with more realistic curve
     if (controls.up) {
-      this.velocity = Math.min(this.velocity + baseAcceleration * normalizedDelta, effectiveMaxSpeed)
+      const accelerationCurve = 1 - (this.velocity / effectiveMaxSpeed) * 0.8
+      this.velocity = Math.min(
+        this.velocity + baseAcceleration * accelerationCurve * normalizedDelta,
+        effectiveMaxSpeed
+      )
     } else if (controls.down) {
-      this.velocity = Math.max(this.velocity - baseAcceleration * normalizedDelta, -effectiveMaxSpeed * 0.5)
-    } else {
-      // Apply drag when no acceleration input
-      if (this.velocity > 0) {
-        this.velocity = Math.max(0, this.velocity - baseAcceleration * 0.5 * normalizedDelta)
-      } else if (this.velocity < 0) {
-        this.velocity = Math.min(0, this.velocity + baseAcceleration * 0.5 * normalizedDelta)
-      }
+      this.velocity = Math.max(
+        this.velocity - baseAcceleration * 0.7 * normalizedDelta,
+        -effectiveMaxSpeed * 0.5
+      )
     }
+
+    // Apply air resistance and tire friction
+    this.velocity *= Math.pow(this.airResistance, normalizedDelta)
+    if (Math.abs(this.velocity) < 0.1) this.velocity = 0
   }
 
   private updatePhysics(deltaTime: number): void {
-    if (Math.abs(this.velocity) < 0.1) return  // Skip physics at very low speeds
+    if (Math.abs(this.velocity) < 0.1) return
 
-    const normalizedDelta = deltaTime / 16 // Normalize to 60fps
-    const isReversing = this.velocity < 0
-    const speedFactor = Math.min(Math.abs(this.velocity) / (isReversing ? this.maxReverseSpeed : this.maxSpeed), 1)
 
-    // Calculate turn radius based on steering angle and wheelbase
-    // Ackermann steering geometry (simplified)
+    // Improved steering physics
     const turnRadius = this.wheelbase / Math.sin(Math.abs(this.steeringAngle) + 0.001)
 
-    // Calculate ideal turning rate based on velocity and turn radius
-    const idealTurnRate = (this.velocity / turnRadius) * Math.sign(this.steeringAngle)
+    // Realistic grip calculation
 
-    // Calculate actual turn rate with grip and drift factors
-    const gripMultiplier = this.gripFactor * (1 - speedFactor * (1 - this.driftFactor))
+    // STEP 1: For demonstration, let's say we compute driveForce for rear wheels
+    // based on user's throttle. If controls.up, produce some positive force; if down, negative:
+    let driveForce = 0
+    // For example:
+    // driveForce = someAcceleration * massOfCar * (controls.up ? 1 : (controls.down ? -1 : 0))
 
-    // Apply weight transfer effect
-    const weightTransferEffect = this.weightTransfer * speedFactor * Math.abs(this.steeringAngle)
-    const effectiveTurnRate = idealTurnRate * gripMultiplier * (1 - weightTransferEffect) * normalizedDelta
+    // STEP 2: Update each wheel's forces
+    // Combine the car's velocity into {x, y}, and an angular velocity (currently not tracked in your code).
+    // For a simpler approach, we approximate angularVelocity from your rotation changes:
+    const carAngularVel = this.angularVelocity
+    const dt = deltaTime / 1000 // convert ms to seconds if you track it that way
 
-    // Update rotation
-    this.rotation += effectiveTurnRate
+    this.wheels.forEach(w => {
+      // If it's a front wheel, set w.steeringAngle = this.steeringAngle
+      // Rear wheels get no steeringAngle
+      w.updateWheel(
+        { x: Math.sin(this.rotation) * this.velocity, y: -Math.cos(this.rotation) * this.velocity },
+        carAngularVel,
+        this.rotation,
+        w.isFrontWheel ? this.steeringAngle : 0,
+        dt,
+        w.isFrontWheel ? 0 : driveForce // drive force only on rear wheels for RWD
+      )
+    })
 
-    // Calculate and update lateral velocity (drift)
-    const turnForce = Math.abs(this.velocity * this.steeringAngle) * (1 - gripMultiplier)
-    this.lateralVelocity = turnForce * Math.sign(this.steeringAngle) * this.driftFactor
+    // STEP 3: Sum up forces from wheels:
+    let totalTorque = 0
+    this.wheels.forEach(w => {
+      // If you store fx, fy in each wheel, sum them up here. We used an example getTorque():
+      totalTorque += w.getTorque()
+    })
 
-    // Decay lateral velocity
-    this.lateralVelocity *= Math.pow(0.95, normalizedDelta)
+    // Use PD control to drive the angular velocity towards the desired turn rate
+    const turnMultiplier = 20; // increased multiplier to amplify desired turn rate
+    const desiredAngularVelocity = (Math.abs(this.steeringAngle) > 0.01) ? (this.velocity / turnRadius) * Math.sign(this.steeringAngle) * turnMultiplier : 0;
+    const gain = 20; // increased gain factor for responsiveness
+    this.angularVelocity += (desiredAngularVelocity - this.angularVelocity) * gain * dt;
+
+    // Update rotation from angular velocity
+    this.rotation += this.angularVelocity * dt;
+
+    // STEP 4: Integrate motion for the car body.
+    // For instance:
+    // carAx = totalFx / carMass
+    // carAy = totalFy / carMass
+    // this.velocity.x += carAx * dt  (but your code currently uses a scalar 'velocity')
+    // ...
+    // rotation += (totalTorque / carInertia) * dt
+
+    // ) Keep or remove parts of your old drift code as you see fit. The wheel-based approach
+    //   typically replaces that logic, because each wheel is generating real lateral forces.
   }
 
   private updatePosition(): void {
-    // Update position based on velocity and rotation
-    this.worldPosition.x += Math.sin(this.rotation) * this.velocity + Math.cos(this.rotation) * this.lateralVelocity
-    this.worldPosition.y -= Math.cos(this.rotation) * this.velocity - Math.sin(this.rotation) * this.lateralVelocity
+    // Improved position update with more accurate drift
+    const forwardX = Math.sin(this.rotation) * this.velocity
+    const forwardY = -Math.cos(this.rotation) * this.velocity
 
-    // Create a new shape with the actual rotated rectangle
+    // Only apply significant lateral movement when actually drifting
+    const lateralMultiplier = (Math.abs(this.steeringAngle) > 0.01 && Math.abs(this.velocity) > 1) ? 1 : 0.1
+    const lateralX = Math.cos(this.rotation) * this.lateralVelocity * lateralMultiplier
+    const lateralY = Math.sin(this.rotation) * this.lateralVelocity * lateralMultiplier
+
+    this.worldPosition.x += forwardX + lateralX
+    this.worldPosition.y += forwardY + lateralY
+
+    // Update collision shape
     this.shape = new RectShapeImpl(
-      this.worldPosition.x,
-      this.worldPosition.y,
-      this.width,
-      this.height,
-      this.rotation
+        this.worldPosition.x,
+        this.worldPosition.y,
+        this.width,
+        this.height,
+        this.rotation
     )
   }
 

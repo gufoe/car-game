@@ -8,9 +8,9 @@ interface TracePoint {
 
 export class WheelTraces {
   private traces: Map<string, TracePoint[]> = new Map()
-  private readonly maxPoints = 1000  // Maximum points per wheel trace
-  private readonly fadeRate = 0.995  // How quickly traces fade
-  private readonly minIntensity = 0.1  // When to remove trace points
+  private readonly maxPoints = 3000  // Increased from 1000 to allow for longer traces
+  private readonly fadeRate = 0.9985  // Increased from 0.995 for slower fading
+  private readonly minIntensity = 0.05  // Reduced from 0.1 to allow traces to stay visible longer
 
   constructor() {
     // Initialize traces for each wheel

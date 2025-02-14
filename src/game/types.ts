@@ -1,3 +1,4 @@
+/** Represents a 2D position with x,y coordinates */
 export interface Position {
   x: number
   y: number
