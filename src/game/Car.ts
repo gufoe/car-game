@@ -221,8 +221,10 @@ export class Car {
 
   private updatePosition(deltaTime: number): void {
     // Tuning Constants for updatePosition with drifting
+    const maxDeltaTime = 32; // maximum allowed deltaTime in ms to avoid physics glitches
+    const clampedDeltaTime = Math.min(deltaTime, maxDeltaTime);
     const dtFactor = 1 / 50; // converts deltaTime to seconds
-    const dt = deltaTime * dtFactor;
+    const dt = clampedDeltaTime * dtFactor;
 
     const wheelbase = this.wheelbase;
     const halfWheelbase = wheelbase / 2;
@@ -241,7 +243,7 @@ export class Car {
     const speedFactor = Math.min(Math.abs(this.velocity) / this.stats.maxSpeed, 1);
     const effectiveG = BASE_GRIP_G - (BASE_GRIP_G - MIN_GRIP_G) * speedFactor;
     const gripLimit = this.stats.handling * effectiveG;
-    const scale = lateralAcceleration > gripLimit ? gripLimit / lateralAcceleration : 1;
+    const scale = lateralAcceleration > gripLimit ? gripLimit / Math.max(lateralAcceleration, 0.1) : 1;
     let effectiveTan = rawTan * scale;
 
     if (Math.abs(this.velocity) > SPEED_THRESHOLD) {
@@ -253,8 +255,12 @@ export class Car {
 
     // Compute drift acceleration from the difference between intended steering and effective steering due to grip limits
     const driftAccel = (this.velocity * this.velocity / wheelbase) * (rawTan - effectiveTan);
-    // Update lateral velocity due to drifting
-    this.lateralVelocity += driftAccel * dt;
+
+    // Update lateral velocity due to drifting with minimal clamping
+    const maxDriftAccel = this.stats.maxSpeed * 3;
+    const clampedDriftAccel = Math.max(-maxDriftAccel, Math.min(maxDriftAccel, driftAccel));
+    this.lateralVelocity += clampedDriftAccel * dt;
+
     // Apply damping to lateral velocity (simulate friction reducing drift over time)
     const lateralDamping = 3.0;
     this.lateralVelocity *= (1 - lateralDamping * dt);
@@ -264,8 +270,12 @@ export class Car {
     const lateralVec = { x: Math.cos(this.rotation), y: Math.sin(this.rotation) };
 
     // Update car position incorporating both forward and lateral (drift) components
-    this.worldPosition.x += dt * (this.velocity * forwardVec.x + this.lateralVelocity * lateralVec.x);
-    this.worldPosition.y += dt * (this.velocity * forwardVec.y + this.lateralVelocity * lateralVec.y);
+    // Add minimal position change clamping to prevent teleports
+    const maxDelta = this.stats.maxSpeed * dt * 2;
+    const deltaX = dt * (this.velocity * forwardVec.x + this.lateralVelocity * lateralVec.x);
+    const deltaY = dt * (this.velocity * forwardVec.y + this.lateralVelocity * lateralVec.y);
+    this.worldPosition.x += Math.max(-maxDelta, Math.min(maxDelta, deltaX));
+    this.worldPosition.y += Math.max(-maxDelta, Math.min(maxDelta, deltaY));
 
     // Update rotation: combine steering rotation and a drift correction factor that gradually aligns the car with its velocity vector
     const steeringRotation = (this.velocity / wheelbase) * effectiveTan * dt;
