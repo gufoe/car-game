@@ -220,63 +220,66 @@ export class Car {
   }
 
   private updatePosition(deltaTime: number): void {
-    // Tuning Constants for updatePosition
-    const dtFactor = 1 / 50; // Converts deltaTime to seconds; adjust this factor to speed up or slow down simulation time
-    const dt = deltaTime * dtFactor; // Delta time in seconds
+    // Tuning Constants for updatePosition with drifting
+    const dtFactor = 1 / 50; // converts deltaTime to seconds
+    const dt = deltaTime * dtFactor;
 
-    const wheelbase = this.wheelbase;            // Car's wheelbase (distance between front and rear axles)
-    const halfWheelbase = wheelbase / 2;           // Distance from car's center to rear axle
+    const wheelbase = this.wheelbase;
+    const halfWheelbase = wheelbase / 2;
 
-    // Grip-related tuning constants
-    const BASE_GRIP_G = 10;  // Grip constant at low speeds (higher value means more grip when slow)
-    const MIN_GRIP_G = 1;    // Grip constant at high speeds (lower value means less grip when fast)
-    // SPEED_THRESHOLD: speed above which additional front wheel slip occurs
+    // Grip parameters and slipping thresholds
+    const BASE_GRIP_G = 10;  // Grip constant at low speeds
+    const MIN_GRIP_G = 1;    // Grip constant at high speeds
     const SPEED_THRESHOLD = 0.5 * this.stats.maxSpeed;
-    // MAX_EXCESS_SPEED: maximum speed range above the threshold used in slip calculations
     const MAX_EXCESS_SPEED = 0.1 * this.stats.maxSpeed;
-    const FRONT_WHEEL_SLIP_MULTIPLIER = 0.5; // Maximum reduction factor (up to 30% reduction in effective steering) due to front wheel slip at high speeds
+    const FRONT_WHEEL_SLIP_MULTIPLIER = 0.5; // Slip reduction factor for front wheels
+    const TURN_DECEL_MULTIPLIER = 2; // Turning deceleration multiplier
 
-    // Turning deceleration constant
-    const TURN_DECEL_MULTIPLIER = 2; // Multiplier for turning deceleration (simulate traction loss during turns)
-
-    // Begin physics calculations
+    // Compute steering factors
     const rawTan = Math.tan(this.steeringAngle);
     const lateralAcceleration = Math.abs((this.velocity * this.velocity * rawTan) / wheelbase);
-
-    // Compute dynamic grip limit based on current speed
     const speedFactor = Math.min(Math.abs(this.velocity) / this.stats.maxSpeed, 1);
     const effectiveG = BASE_GRIP_G - (BASE_GRIP_G - MIN_GRIP_G) * speedFactor;
     const gripLimit = this.stats.handling * effectiveG;
-
-    // Scale down steering (tan) value if lateral acceleration exceeds grip limit
     const scale = lateralAcceleration > gripLimit ? gripLimit / lateralAcceleration : 1;
     let effectiveTan = rawTan * scale;
 
-    // Apply additional reduction due to front wheel slip at high speeds
     if (Math.abs(this.velocity) > SPEED_THRESHOLD) {
       const excessSpeed = Math.abs(this.velocity) - SPEED_THRESHOLD;
-      const slipRatio = excessSpeed / MAX_EXCESS_SPEED; // Ranges from 0 to 1
-      const reductionFactor = 1 - FRONT_WHEEL_SLIP_MULTIPLIER * slipRatio; // Up to 30% reduction at maximum excess speed
+      const slipRatio = excessSpeed / MAX_EXCESS_SPEED;
+      const reductionFactor = 1 - FRONT_WHEEL_SLIP_MULTIPLIER * slipRatio;
       effectiveTan *= reductionFactor;
     }
 
-    // Compute effective slip angle beta using the bicycle model
-    const beta = Math.atan((halfWheelbase / wheelbase) * effectiveTan);
+    // Compute drift acceleration from the difference between intended steering and effective steering due to grip limits
+    const driftAccel = (this.velocity * this.velocity / wheelbase) * (rawTan - effectiveTan);
+    // Update lateral velocity due to drifting
+    this.lateralVelocity += driftAccel * dt;
+    // Apply damping to lateral velocity (simulate friction reducing drift over time)
+    const lateralDamping = 3.0;
+    this.lateralVelocity *= (1 - lateralDamping * dt);
 
-    // Update car center position using effective slip angle
-    this.worldPosition.x += this.velocity * dt * Math.sin(this.rotation + beta);
-    this.worldPosition.y += this.velocity * dt * -Math.cos(this.rotation + beta);
+    // Compute movement vectors based on current rotation
+    const forwardVec = { x: Math.sin(this.rotation), y: -Math.cos(this.rotation) };
+    const lateralVec = { x: Math.cos(this.rotation), y: Math.sin(this.rotation) };
 
-    // Update orientation
-    const dtheta = (this.velocity / wheelbase) * Math.cos(beta) * effectiveTan * dt;
-    this.rotation += dtheta;
-    this.angularVelocity = dtheta / dt;
+    // Update car position incorporating both forward and lateral (drift) components
+    this.worldPosition.x += dt * (this.velocity * forwardVec.x + this.lateralVelocity * lateralVec.x);
+    this.worldPosition.y += dt * (this.velocity * forwardVec.y + this.lateralVelocity * lateralVec.y);
 
-    // Update rear axle position based on new center and orientation
+    // Update rotation: combine steering rotation and a drift correction factor that gradually aligns the car with its velocity vector
+    const steeringRotation = (this.velocity / wheelbase) * effectiveTan * dt;
+    const slipAngle = (this.velocity !== 0 ? Math.atan2(this.lateralVelocity, Math.abs(this.velocity)) : 0);
+    const driftCorrectionFactor = 1.0;
+    const rotationChange = steeringRotation - driftCorrectionFactor * slipAngle * dt;
+    this.rotation += rotationChange;
+    this.angularVelocity = rotationChange / dt;
+
+    // Update rear axle position based on new center and rotation
     this.rearAxlePos.x = this.worldPosition.x - halfWheelbase * Math.sin(this.rotation);
     this.rearAxlePos.y = this.worldPosition.y + halfWheelbase * Math.cos(this.rotation);
 
-    // Update collision shape to match new position and orientation
+    // Update collision shape to match new position and rotation
     this.shape = new RectShapeImpl(this.worldPosition.x, this.worldPosition.y, this.width, this.height, this.rotation);
 
     // Apply turning deceleration to simulate traction loss during turns
