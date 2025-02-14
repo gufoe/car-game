@@ -46,8 +46,12 @@ export class WheelTraces {
   public draw(ctx: CanvasRenderingContext2D, carPosition: Position): void {
     ctx.save()
 
-    for (const trace of this.traces.values()) {
+    for (const [wheelName, trace] of this.traces.entries()) {
       if (trace.length < 2) continue
+
+      // Determine color based on wheel position
+      const isRearWheel = wheelName.startsWith('rear')
+      const baseColor = isRearWheel ? 'rgba(0, 0, 255,' : 'rgba(0, 255, 0,'
 
       // Draw each segment with its own opacity based on recorded intensity
       for (let i = 1; i < trace.length; i++) {
@@ -55,18 +59,12 @@ export class WheelTraces {
         const currentPoint = trace[i]
 
         ctx.beginPath()
-        ctx.moveTo(
-          prevPoint.x - carPosition.x,
-          prevPoint.y - carPosition.y
-        )
-        ctx.lineTo(
-          currentPoint.x - carPosition.x,
-          currentPoint.y - carPosition.y
-        )
+        ctx.moveTo(prevPoint.x, prevPoint.y)
+        ctx.lineTo(currentPoint.x, currentPoint.y)
 
         // Use average intensity of the two points for smooth transitions
         const segmentIntensity = (prevPoint.intensity + currentPoint.intensity) / 2
-        ctx.strokeStyle = `rgba(40, 40, 40, ${segmentIntensity * 0.5})`
+        ctx.strokeStyle = `${baseColor}${segmentIntensity * 0.5})`
         ctx.lineWidth = 2
         ctx.stroke()
       }
@@ -76,9 +74,10 @@ export class WheelTraces {
   }
 
   public clear(): void {
-    this.traces.clear()
-    ['frontLeft', 'frontRight', 'rearLeft', 'rearRight'].forEach(wheel => {
-      this.traces.set(wheel, [])
-    })
+    const wheelNames = ['frontLeft', 'frontRight', 'rearLeft', 'rearRight'] as const;
+    this.traces = new Map();
+    wheelNames.forEach((wheel) => {
+      this.traces.set(wheel, []);
+    });
   }
 }

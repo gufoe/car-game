@@ -31,9 +31,9 @@ export class Car {
   private readonly maxReverseSpeed: number
   private readonly steeringSpeed = Math.PI / 32
   private readonly maxSteeringAngle = Math.PI / 4
-  private readonly gripFactor = 0.95       // How much grip the car has (0-1)
-  private readonly driftFactor = 0.7       // How much the car drifts (0-1)
-  private readonly weightTransfer = 0.02   // Effect of weight transfer during turns
+  private readonly gripFactor = 1       // How much grip the car has (0-1)
+  private readonly driftFactor = 0.5       // How much the car drifts (0-1)
+  private readonly weightTransfer = 0.3   // Effect of weight transfer during turns
 
   // Dynamic state variables
   private readonly drawer: CarDrawer
@@ -162,11 +162,28 @@ export class Car {
     const intensity = Math.min((speed + drift) / this.maxSpeed, 1)
 
     if (speed > 0.1 || drift > 0.1) {
-      Object.entries(wheelPositions).forEach(([wheel, pos]) => {
-        // Add wheel traces in world space
+      // Get wheel positions in car's local space
+      const halfTrack = this.trackWidth / 2
+      const halfBase = this.wheelbase / 2
+      const localWheels = {
+        frontLeft: { x: -halfTrack, y: -halfBase },
+        frontRight: { x: halfTrack, y: -halfBase },
+        rearLeft: { x: -halfTrack, y: halfBase },
+        rearRight: { x: halfTrack, y: halfBase }
+      }
+
+      // Transform each wheel position to world space
+      const cos = Math.cos(this.rotation)
+      const sin = Math.sin(this.rotation)
+      Object.entries(localWheels).forEach(([wheel, pos]) => {
+        // First rotate by car's rotation
+        const rotatedX = pos.x * cos - pos.y * sin
+        const rotatedY = pos.x * sin + pos.y * cos
+
+        // Store in world coordinates
         this.traces.addTracePoint(wheel, {
-          x: this.worldPosition.x + pos.x,
-          y: this.worldPosition.y + pos.y
+          x: this.worldPosition.x + rotatedX,
+          y: this.worldPosition.y + rotatedY
         }, intensity)
       })
     }
